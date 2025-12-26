@@ -1,7 +1,11 @@
 import sys
 import os
 import json
-import whisper
+try:
+    import whisper
+except ImportError:
+    print("ERROR: Whisper dependency missing. Ensure openai-whisper is installed.", file=sys.stderr)
+    sys.exit(1)
 import warnings
 
 # Suppress FP16 warning if running on CPU

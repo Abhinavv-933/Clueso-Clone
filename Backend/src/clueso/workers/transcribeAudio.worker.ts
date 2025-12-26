@@ -70,9 +70,16 @@ export const transcribeAudioFromS3 = async ({
 
             whisper.on('close', (code) => {
                 if (code !== 0) {
+                    const cleanStderr = stderr.trim();
                     console.error(`[Worker] Local Whisper script failed with code ${code}`);
-                    console.error(`[Worker] stderr: ${stderr}`);
-                    return reject(new Error(`Local transcription failed: ${stderr || 'Unknown error'}`));
+                    console.error(`[Worker] stderr: ${cleanStderr}`);
+
+                    // Prioritize the ERROR: prefix from our script
+                    const errorMessage = cleanStderr.includes('ERROR:')
+                        ? cleanStderr.substring(cleanStderr.indexOf('ERROR:') + 6).trim()
+                        : cleanStderr || 'Unknown error';
+
+                    return reject(new Error(errorMessage));
                 }
                 // Store stderr for logging outside the Promise
                 stderrOutput = stderr;

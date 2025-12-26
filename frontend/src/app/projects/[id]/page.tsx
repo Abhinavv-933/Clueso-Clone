@@ -270,8 +270,12 @@ export default function ProjectDetailPage() {
                 }
             } else if (status === 'FAILED') {
                 setTranscriptionStatus("failed");
-                const errorMessage = jobData?.errorMessage || data.error || 'Unknown fatal error in pipeline';
-                setTranscriptionError(errorMessage);
+                // Surfacing the specific processing error if it exists
+                const processingError = jobData?.errorMessage || data.error;
+                const displayMessage = processingError
+                    ? `Transcription failed: ${processingError}`
+                    : "Transcription failed due to processing error. Please retry.";
+                setTranscriptionError(displayMessage);
             } else {
                 // Continue polling
                 setTimeout(() => pollJobStatus(jobId), 3000);
