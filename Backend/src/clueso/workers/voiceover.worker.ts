@@ -5,7 +5,7 @@ import { Readable } from 'stream';
 import { s3Client } from '../../config/s3';
 import { env } from '../../config/env';
 import { PiperService } from '../services/piper.service';
-import { ImprovedScript, VoiceoverAsset, VoiceoverSegment } from '../../../../shared';
+import { ImprovedScript, VoiceoverAsset, VoiceoverSegment } from '../../../shared';
 
 interface VoiceoverWorkerInput {
     jobId: string;

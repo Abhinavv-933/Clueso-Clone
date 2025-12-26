@@ -2,7 +2,7 @@ import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client } from '../../config/s3';
 import { env } from '../../config/env';
 import { OllamaService } from '../services/ollama.service';
-import { TranscriptSegment, ImprovedScript, ImprovedScriptSegment } from '../../../../shared';
+import { TranscriptSegment, ImprovedScript, ImprovedScriptSegment } from '../../../shared';
 import { Readable } from 'stream';
 
 interface ImproveScriptInput {

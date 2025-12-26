@@ -1,17 +1,11 @@
 {
-    "compilerOptions": {
-        "target": "ES2020",
-        "module": "ESNext",
-        "moduleResolution": "Node",
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true,
-        "resolveJsonModule": true,
-        "isolatedModules": true,
-        "baseUrl": "."
-    },
-    "include": [
-        "shared"
+    "files": [],
+    "references": [
+        {
+            "path": "./Backend"
+        },
+        {
+            "path": "./frontend"
+        }
     ]
 }

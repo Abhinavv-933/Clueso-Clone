@@ -1,5 +1,5 @@
 import { JobStatus } from '../types/jobStatus';
-import { VideoRenderedAsset } from '../../../../shared';
+import { VideoRenderedAsset } from '../../../shared';
 
 /**
  * Placeholder for in-memory job storage as requested.

@@ -6,7 +6,7 @@ import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { s3Client } from '../../config/s3';
 import { env } from '../../config/env';
-import { VideoRenderedAsset } from '../../../../shared';
+import { VideoRenderedAsset } from '../../../shared';
 
 interface VideoRenderWorkerInput {
     jobId: string;

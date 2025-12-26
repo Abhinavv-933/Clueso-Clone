@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { s3Client } from '../config/s3';
 import { env } from '../config/env';
 import { ProjectModel } from '../models/project.model';
-import { ProjectSchema } from '../../../shared/project.schema';
+import { ProjectSchema } from '../../shared/project.schema';
 import { UploadModel } from '../models/upload.model';
 import { CluesoJobModel } from '../clueso/models/cluesoJob.model';
 
