@@ -1,0 +1,8 @@
+Connected to MongoDB.
+Project ID: 694e50d14ba2a97f914db99c
+Project UserID: user_374qc8uZGVw5xSKFGWAuH6FzJAQ
+Project uploadId: 694e50d14ba2a97f914db999
+Job found: 694e51014ba2a97f914db9a4
+Job status: FAILED
+Job transcriptS3Key: clueso/transcript/user_374qc8uZGVw5xSKFGWAuH6FzJAQ/0ada0168-549f-412b-899b-00c40b851b91.txt
+Job userId: user_374qc8uZGVw5xSKFGWAuH6FzJAQ
