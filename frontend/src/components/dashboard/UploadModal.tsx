@@ -6,6 +6,7 @@ import { X, Upload, FileVideo, Video } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { useProjects } from "@/context/ProjectContext";
+import { API_URL } from "@/lib/api";
 
 interface UploadModalProps {
     isOpen: boolean;
@@ -43,7 +44,7 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
 
         try {
             const token = await getToken();
-            const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api";
+            const apiUrl = API_URL;
 
             // 1. Get Presigned URL
             console.log(`[UploadModal] Getting presigned URL from: ${apiUrl}/uploads/presigned-url`);

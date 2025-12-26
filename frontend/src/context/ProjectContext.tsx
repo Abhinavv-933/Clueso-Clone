@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { API_URL } from "@/lib/api";
 
 export type ProjectType = "record" | "upload" | "slides";
 export type ProjectStatus = "processing" | "ready";
@@ -27,8 +28,6 @@ interface ProjectContextType {
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
-
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api";
 
 import { UploadModal } from "@/components/dashboard/UploadModal";
 

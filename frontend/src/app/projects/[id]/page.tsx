@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { API_URL } from "@/lib/api";
 import {
     ArrowLeft,
     Share2,
@@ -82,7 +83,6 @@ export default function ProjectDetailPage() {
     const [rewriteError, setRewriteError] = useState<string | null>(null);
 
 
-    const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api";
 
     const fetchProjectData = useCallback(async () => {
         if (!isLoaded || !isSignedIn) return;
