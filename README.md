@@ -6,8 +6,7 @@ This project demonstrates real-world engineering skills including **secure video
 
 ---
 
-## 🚀 Live Demo
-(https://clueso-clone-khaki.vercel.app/)
+## 🚀 Live Demo - https://clueso-clone-khaki.vercel.app/
 ---
 
 ## 🧠 What This Project Does
