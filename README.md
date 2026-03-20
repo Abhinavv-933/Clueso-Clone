@@ -1,216 +1,187 @@
-# 🎬 Clueso Clone — AI-Powered Video Transcription Platform
+# Clueso Clone — AI-Powered Video Transcription Platform
 
-A full-stack, production-ready clone of Clueso.io, built to replicate its **core workflows, system architecture, and user experience** — not just the UI.
+> A production-grade full-stack clone of [Clueso.io](https://clueso.io), replicating its core workflows, system architecture, and user experience — not just the UI.
 
-This project demonstrates real-world engineering skills including **secure video uploads, AI transcription pipelines, async workflows, frontend performance optimization, and cloud deployment**.
-
----
-
-## 🚀 Live Demo - https://clueso-clone-khaki.vercel.app/
----
-
-## 🧠 What This Project Does
-
-- Upload videos securely
-- Generate AI-powered transcripts
-- Display transcripts asynchronously
-- Edit transcripts in real-time
-- Manage video projects
-- Deliver a smooth, SaaS-grade user experience
+🔗 **Live Demo:** [clueso-clone-khaki.vercel.app](https://clueso-clone-khaki.vercel.app/)
 
 ---
 
-## 🛠 Tech Stack
+## Overview
 
-### Frontend
-- Next.js (App Router)
-- React
-- TypeScript
-- Tailwind CSS
-- Clerk Authentication
-
-### Backend
-- Node.js
-- Express
-- MongoDB (Mongoose)
-- AWS S3 (Presigned URLs)
-- OpenAI Transcription API
-
-### DevOps / Deployment
-- Render
-- Environment-based configuration
-- Secure secrets handling
+Clueso Clone is a SaaS-grade video transcription platform where users can upload videos, generate AI-powered transcripts asynchronously, and edit them in real time. The project demonstrates real-world engineering — from secure cloud uploads to async AI pipelines and frontend performance optimization.
 
 ---
 
-## 🏗 System Architecture
+## Tech Stack
 
+| Layer | Technology |
+|---|---|
+| **Frontend** | Next.js (App Router), React, TypeScript, Tailwind CSS |
+| **Auth** | Clerk |
+| **Backend** | Node.js, Express |
+| **Database** | MongoDB (Mongoose) |
+| **Storage** | AWS S3 (Presigned URLs) |
+| **AI** | OpenAI Transcription API |
+| **Deployment** | Vercel (Frontend), Render (Backend) |
+
+---
+
+## System Architecture
+
+```
 Client (Next.js)
-→ Presigned URL (Backend)
-→ AWS S3 (Video Storage)
-→ Metadata saved to MongoDB
-→ Async AI Transcription
-→ Transcript stored & fetched
-→ Editable Transcript UI
+  └─→ Request presigned URL (Express Backend)
+        └─→ Direct upload to AWS S3
+              └─→ Save metadata to MongoDB
+                    └─→ Trigger async AI transcription (OpenAI)
+                          └─→ Store transcript in MongoDB
+                                └─→ Fetch & display in editable UI
+```
 
 ---
 
-## ✨ Features
+## Features
 
-### ✅ Authentication
-- Secure login/signup with Clerk
-- Protected API routes
-- Session-based user access
+### Authentication
+- Secure login/signup via Clerk
+- Protected API routes with session-based access
 
-### ✅ Video Upload Pipeline
-- Client-side validation
-- Direct S3 upload using presigned URLs
-- Metadata persistence in MongoDB
-- No server-side file buffering
+### Video Upload Pipeline
+- Client-side file validation
+- Direct-to-S3 upload using presigned URLs (no server-side buffering)
+- Metadata saved to MongoDB post-upload
 
-### ✅ Project Management
-- Auto-create project after upload
-- Project listing & detail pages
-- Stable routing and navigation
+### Project Management
+- Auto-create project on upload
+- Project listing and detail pages with stable routing
 
-### ✅ AI Transcription
-- Asynchronous transcription trigger
-- Non-blocking backend processing
-- Progressive transcript loading
-- Production-safe error handling
+### AI Transcription
+- Async, non-blocking transcription triggered post-upload
+- Polling-based frontend refresh for progressive loading
+- Status-driven transcript fetching
 
-### ✅ Transcript Editor
-- Editable transcript UI
-- Optimized rendering for large text
-- Smooth UX with async updates
-
-### ✅ Performance Optimizations
-- Fixed scroll-based UI lag
-- Prevented unnecessary re-renders
-- Optimized async state handling
+### Transcript Editor
+- Real-time editable transcript UI
+- Optimized rendering for large text blocks
+- Smooth async state updates
 
 ---
 
-## 🧩 Engineering Challenges Solved
+## Engineering Challenges
 
-### 1. Async Transcript Delay
-**Problem:** Transcript appeared too late or only after refresh  
-**Solution:**
-- Background transcription job
-- Polling/refetch strategy on frontend
-- Status-based transcript fetching
+### Async Transcript Delay
+**Problem:** Transcript appeared only after a manual page refresh.  
+**Solution:** Implemented a background transcription job with a polling/refetch strategy and status-based conditional fetching on the frontend.
 
-### 2. Local vs Production Issues
-**Problem:** Features worked locally but failed on deployment  
-**Solution:**
-- Environment-safe OpenAI integration
-- Verified Render compatibility
-- Removed local-only assumptions
+### Local vs Production Divergence
+**Problem:** Features passed locally but failed on Render.  
+**Solution:** Audited and hardened all environment-dependent code paths; verified OpenAI SDK compatibility with Render's runtime.
 
-### 3. Next.js Configuration Conflicts
-**Problem:** `middleware.ts` & `proxy.ts` conflict  
-**Solution:**
-- Removed proxy
-- Followed official Next.js middleware guidelines
+### Next.js Middleware Conflict
+**Problem:** `middleware.ts` and `proxy.ts` clashed, breaking routing.  
+**Solution:** Removed the proxy layer and aligned implementation with Next.js official middleware patterns.
 
-### 4. Frontend Performance Bottlenecks
-**Problem:** Slow scroll-based text rendering  
-**Solution:**
-- Optimized scroll listeners
-- Reduced DOM updates
-- Improved intersection observer usage
+### Frontend Performance
+**Problem:** Scroll-based rendering caused visible lag on long transcripts.  
+**Solution:** Optimized scroll listeners, reduced unnecessary DOM updates, and improved Intersection Observer usage.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
+```
 frontend/
-├─ app/
-├─ components/
-├─ services/
-├─ styles/
-└─ utils/
+├── app/           # Next.js App Router pages
+├── components/    # Reusable UI components
+├── services/      # API service layer
+├── styles/        # Global styles
+└── utils/         # Helper utilities
 
 backend/
-├─ controllers/
-├─ routes/
-├─ services/
-├─ models/
-├─ config/
-└─ utils/
+├── controllers/   # Route handler logic
+├── routes/        # Express route definitions
+├── services/      # Business logic & AI integration
+├── models/        # Mongoose schemas
+├── config/        # Environment & app config
+└── utils/         # Shared utilities
+```
 
 ---
 
-## 🔐 Environment Variables
+## Local Setup
+
+### Prerequisites
+- Node.js 18+
+- MongoDB URI
+- AWS S3 bucket with credentials
+- OpenAI API key
+- Clerk account
 
 ### Backend
-PORT=8000  
-MONGODB_URI=your_mongo_uri  
-AWS_ACCESS_KEY_ID=your_key  
-AWS_SECRET_ACCESS_KEY=your_secret  
-AWS_S3_BUCKET_NAME=your_bucket  
-OPENAI_API_KEY=your_openai_key  
-CLERK_SECRET_KEY=your_clerk_secret  
+
+```bash
+cd backend
+npm install
+npm run dev
+```
 
 ### Frontend
-NEXT_PUBLIC_API_URL=http://localhost:8000  
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_key  
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 ---
 
-## ▶️ Running Locally
+## Environment Variables
 
-### Backend
-cd backend  
-npm install  
-npm run dev  
+### Backend (`.env`)
 
-### Frontend
-cd frontend  
-npm install  
-npm run dev  
+```env
+PORT=8000
+MONGODB_URI=your_mongo_uri
+AWS_ACCESS_KEY_ID=your_key
+AWS_SECRET_ACCESS_KEY=your_secret
+AWS_S3_BUCKET_NAME=your_bucket
+OPENAI_API_KEY=your_openai_key
+CLERK_SECRET_KEY=your_clerk_secret
+```
 
----
+### Frontend (`.env.local`)
 
-## 🧪 Current Status
-
-- ✅ Video upload works
-- ✅ Transcription works (local & deployed)
-- ✅ Transcript editing works
-- ✅ Deployment stable
-- ✅ Production-ready architecture
-
----
-
-## 🔮 Future Enhancements
-
-- AI-powered transcript corrections
-- AI voiceover generation
-- Subtitle (.srt) export
-- WebSocket-based real-time updates
-- Video export with voiceover
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_publishable_key
+```
 
 ---
 
-## 📌 Why This Project Matters
+## Status
 
-This is **not a toy clone**.
-
-It demonstrates:
-- Real SaaS product understanding
-- Backend async orchestration
-- Cloud storage integration
-- Frontend performance tuning
-- Production debugging experience
-
-Exactly what **recruiters look for in full-stack engineers**.
+| Feature | Status |
+|---|---|
+| Video upload | ✅ Working |
+| AI transcription | ✅ Working (local & deployed) |
+| Transcript editing | ✅ Working |
+| Authentication | ✅ Working |
+| Deployment | ✅ Stable |
 
 ---
 
-## 👨‍💻 Author
+## Roadmap
+
+- [ ] AI-powered transcript corrections
+- [ ] AI voiceover generation
+- [ ] Subtitle (`.srt`) export
+- [ ] WebSocket-based real-time transcript updates
+- [ ] Video export with embedded voiceover
+
+---
+
+## Author
 
 **Abhinav Dwivedi**  
 
-## Clueso Clone – Architecture Documentation
-
-[Architecture Documentation](docs/clueso-architecture/)
+📄 [Architecture Documentation](docs/clueso-architecture/)
