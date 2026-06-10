@@ -30,11 +30,14 @@ graph TD
     end
 
     %% Async Processing
-    subgraph Async [Background Processing]
-        Redis[Redis]
-        BullMQ[BullMQ]
-        T_Worker[Transcription Worker]
-        C_Worker[Content Gen Worker]
+    HTTP request(Database-backed asynchronous processing)
+    → Create job in MongoDB
+    → Fire async process
+    → Update job status in DB
+    → Frontend polls status
+    
+    T_Worker[Transcription Worker]
+    C_Worker[Content Gen Worker]
     end
 
     %% External Services
@@ -49,10 +52,10 @@ graph TD
     UI -->|3. POST /projects| API
     
     API -->|4. Create Record| DB
-    API -->|5. Add Job| BullMQ
-    BullMQ -->|6. Queue Job| Redis
+    API -->|5. Add Job| 
+     -->|6. Queue Job| 
     
-    Redis -->|7. Process Job| T_Worker
+          |7. Process Job| T_Worker
     T_Worker -->|8. Get File| S3
     T_Worker -->|9. Transcribe| Whisper
     T_Worker -->|10. Update DB| DB

@@ -17,7 +17,7 @@ interface ScriptSidebarProps {
     onGenerateVoiceover: () => void;
     onGenerateTranscript: () => void;
     isProcessing?: boolean;
-    transcriptionStatus?: "idle" | "starting" | "processing" | "completed" | "failed";
+    transcriptionStatus?: "idle" | "processing" | "done" | "error";
     isGeneratingVoiceover?: boolean;
     isRewriting?: boolean;
     rewrittenScript?: string | null;
@@ -108,50 +108,7 @@ export function ScriptSidebar({
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {activeTab === 'script' ? (
                     <div className="p-2 space-y-2">
-                        {!hasTranscript && transcriptionStatus === "idle" ? (
-                            <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-6 mt-10">
-                                <div className="w-16 h-16 rounded-3xl bg-pink-500/10 flex items-center justify-center border border-pink-500/20 shadow-[0_0_30px_rgba(236,72,153,0.1)]">
-                                    <Sparkles className="w-8 h-8 text-pink-500" />
-                                </div>
-                                <div className="space-y-2">
-                                    <button
-                                        onClick={onGenerateTranscript}
-                                        className="px-6 py-2.5 bg-pink-500 rounded-xl text-white font-bold text-sm shadow-xl shadow-pink-500/20 hover:scale-105 active:scale-95 transition-all"
-                                    >
-                                        Generate Transcript
-                                    </button>
-                                    <p className="text-[11px] text-gray-500 font-medium">Create a script from your video instantly.</p>
-                                </div>
-                            </div>
-                        ) : transcriptionStatus === "starting" || transcriptionStatus === "processing" ? (
-                            <div className="flex flex-col items-center justify-center h-full gap-4 mt-20">
-                                <div className="w-10 h-10 border-2 border-pink-500/20 border-t-pink-500 rounded-full animate-spin" />
-                                <div className="text-center space-y-1">
-                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">
-                                        {transcriptionStatus === "starting" ? "Starting transcription..." : "Transcription in progress"}
-                                    </span>
-                                    {transcriptionStatus === "processing" && (
-                                        <p className="text-[10px] text-gray-600 font-medium">This may take a minute for longer videos</p>
-                                    )}
-                                </div>
-                            </div>
-                        ) : transcriptionError ? (
-                            <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-4 mt-10">
-                                <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center border border-red-500/20 shadow-lg shadow-red-500/5">
-                                    <Plus className="w-6 h-6 text-red-500 rotate-45" />
-                                </div>
-                                <div className="space-y-2">
-                                    <h3 className="text-sm font-bold text-red-400 uppercase tracking-tight">Transcription Failed</h3>
-                                    <p className="text-[11px] text-gray-400 font-medium px-4">{transcriptionError}</p>
-                                    <button
-                                        onClick={onGenerateTranscript}
-                                        className="mt-2 text-[11px] font-black text-white hover:text-pink-500 transition-colors uppercase tracking-widest"
-                                    >
-                                        Try Again
-                                    </button>
-                                </div>
-                            </div>
-                        ) : hasTranscript ? (
+                        {hasTranscript ? (
                             // Render transcript segments if they exist, regardless of status
                             segments.map((segment, index) => (
                                 <div
@@ -192,6 +149,47 @@ export function ScriptSidebar({
                                     </div>
                                 </div>
                             ))
+                        ) : transcriptionStatus === "processing" ? (
+                            <div className="flex flex-col items-center justify-center h-full gap-4 mt-20">
+                                <div className="w-10 h-10 border-2 border-pink-500/20 border-t-pink-500 rounded-full animate-spin" />
+                                <div className="text-center space-y-1">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">
+                                        Transcription in progress
+                                    </span>
+                                    <p className="text-[10px] text-gray-600 font-medium">This may take a minute for longer videos</p>
+                                </div>
+                            </div>
+                        ) : transcriptionError ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-4 mt-10">
+                                <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center border border-red-500/20 shadow-lg shadow-red-500/5">
+                                    <Plus className="w-6 h-6 text-red-500 rotate-45" />
+                                </div>
+                                <div className="space-y-2">
+                                    <h3 className="text-sm font-bold text-red-400 uppercase tracking-tight">Transcription Failed</h3>
+                                    <p className="text-[11px] text-gray-400 font-medium px-4">{transcriptionError}</p>
+                                    <button
+                                        onClick={onGenerateTranscript}
+                                        className="mt-2 text-[11px] font-black text-white hover:text-pink-500 transition-colors uppercase tracking-widest"
+                                    >
+                                        Try Again
+                                    </button>
+                                </div>
+                            </div>
+                        ) : transcriptionStatus === "idle" ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-6 mt-10">
+                                <div className="w-16 h-16 rounded-3xl bg-pink-500/10 flex items-center justify-center border border-pink-500/20 shadow-[0_0_30px_rgba(236,72,153,0.1)]">
+                                    <Sparkles className="w-8 h-8 text-pink-500" />
+                                </div>
+                                <div className="space-y-2">
+                                    <button
+                                        onClick={onGenerateTranscript}
+                                        className="px-6 py-2.5 bg-pink-500 rounded-xl text-white font-bold text-sm shadow-xl shadow-pink-500/20 hover:scale-105 active:scale-95 transition-all"
+                                    >
+                                        Generate Transcript
+                                    </button>
+                                    <p className="text-[11px] text-gray-500 font-medium">Create a script from your video instantly.</p>
+                                </div>
+                            </div>
                         ) : null}
                     </div>
                 ) : (

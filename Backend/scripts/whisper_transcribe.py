@@ -55,9 +55,9 @@ def transcribe(audio_path, model_size="base"):
         # Add Hindi-specific optimizations for better accuracy
         if detected_language == 'hi':
             print(f"Applying Hindi-specific configuration for improved accuracy", file=sys.stderr)
-            transcribe_options['beam_size'] = 5  # More thorough beam search decoding
-            transcribe_options['best_of'] = 5    # Consider more candidate sequences
-            transcribe_options['temperature'] = 0.0  # Deterministic output (no sampling)
+            transcribe_options['beam_size'] = 1  # Fast greedy decoding
+            transcribe_options['best_of'] = 1    # Single candidate
+            transcribe_options['temperature'] = 0.0  # Deterministic output
             transcribe_options['compression_ratio_threshold'] = 2.4
             transcribe_options['logprob_threshold'] = -1.0
             transcribe_options['no_speech_threshold'] = 0.6

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { API_URL } from "@/lib/api";
@@ -56,6 +56,11 @@ export default function ProjectDetailPage() {
     const [project, setProject] = useState<ProjectDetail | null>(null);
     const [transcriptByProject, setTranscriptByProject] = useState<Record<string, ScriptSegment[]>>({});
 
+    // Ref to track active jobId for polling to prevent multiple loops
+    const activeJobIdRef = useRef<string | null>(null);
+    // Ref to store the timeout ID for cleanup
+    const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
     // Derived state for current project - Strictly follow precedence:
     // 1. Local state (transcriptByProject)
     // 2. Server state (project.script)
@@ -69,7 +74,7 @@ export default function ProjectDetailPage() {
 
     // Editor-specific state
     const [isProcessing, setIsProcessing] = useState(false);
-    type TranscriptionStatus = "idle" | "starting" | "processing" | "completed" | "failed";
+    type TranscriptionStatus = "idle" | "processing" | "done" | "error";
     const [transcriptionStatus, setTranscriptionStatus] = useState<TranscriptionStatus>("idle");
     const [isGeneratingVoiceover, setIsGeneratingVoiceover] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -126,7 +131,51 @@ export default function ProjectDetailPage() {
 
     useEffect(() => {
         if (id) fetchProjectData();
+
+        return () => {
+            // Cleanup polling on unmount
+            if (pollingTimeoutRef.current) {
+                clearTimeout(pollingTimeoutRef.current);
+            }
+            activeJobIdRef.current = null;
+        };
     }, [id, fetchProjectData]);
+
+    // Effect to handle automatic transcription recovery on load
+    useEffect(() => {
+        if (!project?.jobId || transcriptionStatus !== "idle") return;
+
+        const checkInitialStatus = async () => {
+            try {
+                console.log(`[AutoLoad] Checking status for job: ${project.jobId}`);
+                const token = await getToken();
+                const res = await fetch(`${API_URL}/clueso/jobs/${project.jobId}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const status = data.status;
+
+                    if (['TRANSCRIBED', 'SCRIPT_IMPROVED', 'VOICE_GENERATED', 'VIDEO_MERGED', 'COMPLETED'].includes(status)) {
+                        console.log(`[AutoLoad] Job already ${status}. Fetching transcript...`);
+                        fetchTranscript(project.id);
+                        setTranscriptionStatus("done");
+                    } else if (['UPLOADED', 'AUDIO_EXTRACTED', 'TRANSCRIBING'].includes(status)) {
+                        const jobId = project.jobId as string;
+                        console.log(`[AutoLoad] Job ${status} in progress. Resuming polling...`);
+                        setTranscriptionStatus("processing");
+                        activeJobIdRef.current = jobId;
+                        pollJobStatus(jobId);
+                    }
+                }
+            } catch (err) {
+                console.error("[AutoLoad] Failed to check initial job status:", err);
+            }
+        };
+
+        checkInitialStatus();
+    }, [project?.jobId, transcriptionStatus, project?.id]);
 
     const handleRename = async () => {
         if (!newName.trim() || !project || newName === project?.name) {
@@ -172,68 +221,60 @@ export default function ProjectDetailPage() {
         }
     };
 
-    const fetchTranscript = async (projectId: string) => {
-        const MAX_RETRIES = 20;
-        const RETRY_DELAY = 1500;
-        let retryCount = 0;
-        let success = false;
+    const fetchTranscript = async (projectId: string, retryCount = 0) => {
+        const MAX_RETRIES = 10;
+        const RETRY_DELAY = 2000;
 
-        const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+        try {
+            console.log(`[Transcript] Fetching transcript for project: ${projectId} (Attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+            const token = await getToken();
+            const res = await fetch(`${API_URL}/clueso/transcript/${projectId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
 
-        while (retryCount < MAX_RETRIES && !success) {
-            try {
-                console.log(`[Transcript] Fetching real transcript for project: ${projectId} (Attempt ${retryCount + 1})`);
-                const token = await getToken();
-                const res = await fetch(`${API_URL}/clueso/transcript/${projectId}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+            if (res.status === 200) {
+                const data = await res.json();
+                if (data.transcript) {
+                    console.log('[Transcript] Received transcript data successfully.');
+                    const newSegments: ScriptSegment[] = [{
+                        id: 'imported-1',
+                        text: data.transcript,
+                        type: 'Script',
+                        speaker: 'Speaker'
+                    }];
 
-                if (res.status === 200) {
-                    const data = await res.json();
-                    if (data.transcript) {
-                        console.log('[Transcript] Received transcript data');
-                        const newSegments: ScriptSegment[] = [{
-                            id: 'imported-1',
-                            text: data.transcript,
-                            type: 'Script',
-                            speaker: 'Speaker'
-                        }];
-
-                        setTranscriptByProject(prev => ({
-                            ...prev,
-                            [projectId]: newSegments
-                        }));
-                        setTranscriptionError(null);
-                        setTranscriptionStatus("completed");
-                        success = true;
-                        break;
-                    }
-                } else if (res.status === 202) {
-                    console.log(`[Transcript] Still processing. Waiting ${RETRY_DELAY}ms (Attempt ${retryCount + 1}/${MAX_RETRIES})`);
-                    // Update status to processing on first 202 to show active polling
-                    if (retryCount === 0) {
-                        setTranscriptionStatus("processing");
-                    }
-                    retryCount++;
-                    if (retryCount < MAX_RETRIES) {
-                        await sleep(RETRY_DELAY);
-                    } else {
-                        console.error('[Transcript] Max retries reached while waiting for transcript');
-                        setTranscriptionError("Transcript generation timed out. Please try again later.");
-                        setTranscriptionStatus("failed");
-                    }
-                } else {
-                    console.error(`[Transcript] Failed to fetch transcript with status: ${res.status}`);
-                    setTranscriptionError(`Failed to fetch transcript (Status: ${res.status})`);
-                    setTranscriptionStatus("failed");
-                    break;
+                    setTranscriptByProject(prev => ({
+                        ...prev,
+                        [projectId]: newSegments
+                    }));
+                    setTranscriptionError(null);
+                    setTranscriptionStatus("done");
+                    return true;
                 }
-            } catch (err) {
-                console.error('[Transcript] Error during fetch attempts:', err);
-                setTranscriptionError(err instanceof Error ? err.message : 'Unknown error fetching transcript');
-                setTranscriptionStatus("failed");
-                break;
             }
+
+            // If status is 202 or other error, retry if within limit
+            if (retryCount < MAX_RETRIES) {
+                console.log(`[Transcript] Transcript not yet available (Status: ${res.status}). Retrying in ${RETRY_DELAY}ms...`);
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                return fetchTranscript(projectId, retryCount + 1);
+            } else {
+                console.error(`[Transcript] Max retries reached. Transcript failed to load.`);
+                setTranscriptionError(`Failed to load transcript after multiple attempts. Status: ${res.status}`);
+                setTranscriptionStatus("error");
+                return false;
+            }
+
+        } catch (err) {
+            console.error('[Transcript] Error during fetch:', err);
+            if (retryCount < MAX_RETRIES) {
+                console.log(`[Transcript] Fetch error. Retrying in ${RETRY_DELAY}ms...`);
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                return fetchTranscript(projectId, retryCount + 1);
+            }
+            setTranscriptionError(err instanceof Error ? err.message : 'Unknown error fetching transcript');
+            setTranscriptionStatus("error");
+            return false;
         }
     };
 
@@ -241,6 +282,12 @@ export default function ProjectDetailPage() {
 
     // Recursive polling function
     const pollJobStatus = async (jobId: string) => {
+        // Stop polling if this job is no longer the active job
+        if (activeJobIdRef.current !== jobId) {
+            console.log(`[Polling] Job ${jobId} is no longer active. Exiting polling loop.`);
+            return;
+        }
+
         try {
             const token = await getToken();
             const res = await fetch(`${API_URL}/clueso/jobs/${jobId}`, {
@@ -248,101 +295,118 @@ export default function ProjectDetailPage() {
             });
 
             if (!res.ok) {
-                console.error(`[Polling] Failed to fetch job status: ${res.status}`);
-                return; // Stop polling on error
+                console.error(`[Polling] API error: ${res.status}. Retrying in 5s...`);
+                pollingTimeoutRef.current = setTimeout(() => pollJobStatus(jobId), 5000);
+                return;
             }
 
             const data = await res.json();
-            const status = data.status;
+            const newStatus = data.status;
             const jobData = data.job;
 
-            console.log(`[Polling] Job ${jobId} status: ${status}`);
+            console.log(`[Polling] Job ${jobId} status update: ${transcriptionStatus} -> ${newStatus}`);
 
-            if (status === 'COMPLETED' || status === 'TRANSCRIBED' || status === 'SCRIPT_IMPROVED' || status === 'VOICE_GENERATED' || status === 'VIDEO_MERGED') {
-                // Status will be set to "completed" in fetchTranscript when transcript is received
-                // Show success briefly, then auto-dismiss
-                setTranscriptionStatus("completed");
-                setTimeout(() => setTranscriptionStatus("idle"), 5000);
+            if (['TRANSCRIBED', 'SCRIPT_IMPROVED', 'VOICE_GENERATED', 'VIDEO_MERGED', 'COMPLETED'].includes(newStatus)) {
+                console.log(`[Polling] Success! Job ${jobId} reached terminal transcription state: ${newStatus}. Stopping job polling loop.`);
+                activeJobIdRef.current = null; // Stop the polling chain for job status
 
-                // Fetch the real transcript now that it is ready
+                // Start the transcript fetch retry chain
                 if (project?.id) {
-                    await fetchTranscript(project.id);
+                    fetchTranscript(project.id);
                 }
-            } else if (status === 'FAILED') {
-                setTranscriptionStatus("failed");
-                // Surfacing the specific processing error if it exists
+                return; // Exit this specific pollJobStatus call
+            }
+            else if (newStatus === 'FAILED') {
+                console.error(`[Polling] Job ${jobId} FAILED.`);
+                setTranscriptionStatus("error");
+                activeJobIdRef.current = null;
                 const processingError = jobData?.errorMessage || data.error;
                 const displayMessage = processingError
                     ? `Transcription failed: ${processingError}`
-                    : "Transcription failed due to processing error. Please retry.";
+                    : "Transcription failed during processing. Please retry.";
                 setTranscriptionError(displayMessage);
+            } else if (['UPLOADED', 'AUDIO_EXTRACTED', 'TRANSCRIBING'].includes(newStatus)) {
+                // Intermediate states
+                setTranscriptionStatus("processing");
+                console.log(`[Polling] Intermediate state: ${newStatus}. Continuing polling...`);
+                pollingTimeoutRef.current = setTimeout(() => pollJobStatus(jobId), 5000);
             } else {
-                // Continue polling
-                setTimeout(() => pollJobStatus(jobId), 3000);
+                // Any other status (possibly future states or legacy ones)
+                // We continue polling unless it's a known terminal state
+                console.log(`[Polling] Handling status "${newStatus}" as intermediate. Continuing...`);
+                setTranscriptionStatus("processing");
+                pollingTimeoutRef.current = setTimeout(() => pollJobStatus(jobId), 5000);
             }
-
-
         } catch (err) {
-            console.error("[Polling] Error:", err);
-            setTranscriptionStatus("failed");
-            setTranscriptionError(err instanceof Error ? err.message : 'Unknown error during polling');
+            console.error("[Polling] Network or Unexpected Error:", err);
+            // Don't kill the loop on transient network errors, retry
+            pollingTimeoutRef.current = setTimeout(() => pollJobStatus(jobId), 5000);
         }
     };
 
     const handleGenerateTranscript = async () => {
         if (!project) return;
+
+        // Prevent multiple simultaneous transcription requests for the same job
+        if (transcriptionStatus === "processing") {
+            console.log('[Transcription] Already processing. Skipping...');
+            return;
+        }
+
         setTranscriptionError(null);
-        setTranscriptionStatus("starting");
+        setTranscriptionStatus("processing");
         console.log('[Transcription] Starting workflow...');
 
         try {
             const token = await getToken();
-            let currentJobId = project.jobId;
 
-            // 1. If we don't have a job yet, create one
-            if (!currentJobId) {
-                if (!project.uploadId) {
-                    throw new Error("Cannot start transcription: Upload ID not found for this project.");
-                }
+            if (!project.uploadId) {
+                throw new Error("Cannot start transcription: Upload ID not found for this project.");
+            }
 
-                console.log('[Transcription] No existing job found. Creating new job...', { uploadId: project.uploadId, projectId: project.id });
+            console.log('[Transcription] Requesting job from backend...', { uploadId: project.uploadId, projectId: project.id });
 
-                const createRes = await fetch(`${API_URL}/clueso/jobs/create-job`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        uploadId: project.uploadId,
-                        projectId: project.id
-                    }),
-                });
+            const createRes = await fetch(`${API_URL}/clueso/jobs/create-job`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    uploadId: project.uploadId,
+                    projectId: project.id
+                }),
+            });
 
-                if (!createRes.ok) {
-                    const errorText = await createRes.text();
-                    throw new Error(`Failed to create job (Status: ${createRes.status}): ${errorText}`);
-                }
+            if (!createRes.ok) {
+                const errorData = await createRes.json();
+                throw new Error(errorData.message || `Failed to initiate transcription (Status: ${createRes.status})`);
+            }
 
-                const jobData = await createRes.json();
-                currentJobId = jobData.jobId;
-                console.log('[Transcription] Job created successfully:', currentJobId);
+            const jobData = await createRes.json();
+            const currentJobId = jobData.jobId;
+            console.log('[Transcription] Job synchronized:', currentJobId, jobData.isReused ? '(Reused)' : '(New)');
 
-                // Update local project state with new jobId
+            // Update local project state if the jobId changed
+            if (project.jobId !== currentJobId) {
                 setProject(prev => prev ? { ...prev, jobId: currentJobId } : null);
-            } else {
-                console.log('[Transcription] Using existing job:', currentJobId);
             }
 
             // 2. Start polling for results
             if (currentJobId) {
+                // Clear any existing timeout before starting new polling
+                if (pollingTimeoutRef.current) {
+                    clearTimeout(pollingTimeoutRef.current);
+                }
+                activeJobIdRef.current = currentJobId;
                 pollJobStatus(currentJobId);
             }
 
         } catch (err) {
             console.error("[Transcription] Workflow failed:", err);
             setTranscriptionError(err instanceof Error ? err.message : 'Unknown error starting transcription');
-            setTranscriptionStatus("failed");
+            setTranscriptionStatus("error");
+            activeJobIdRef.current = null;
         }
 
     };

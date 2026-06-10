@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { s3Client } from '../../config/s3';
@@ -55,8 +55,21 @@ export const extractAudio = async ({
         await pipeline(getResponse.Body as Readable, writeStream);
         console.log(`[Worker] Download complete: ${localVideoPath}`);
 
-        // 2. Extract Audio using FFmpeg
-        console.log(`[Worker] Spawning FFmpeg for audio extraction...`);
+        // 2. Preflight Probe & Delay
+        // Give the OS a moment to finish file indexing/locking
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        console.log(`[Worker] Probing video file: ${localVideoPath}`);
+        try {
+            execSync(`ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${localVideoPath}"`);
+            console.log(`[Worker] Preflight probe successful: Video is readable.`);
+        } catch (probeError) {
+            console.error(`[Worker] Preflight probe failed. Video may be corrupted or unsupported.`);
+            throw new Error(`Invalid video file: FFmpeg could not probe the media. The file may be corrupted or in an unsupported format.`);
+        }
+
+        // 3. Extract Audio using FFmpeg
+        console.log(`[Worker] Spawning FFmpeg for audio extraction with strict flags...`);
         await new Promise<void>((resolve, reject) => {
             const ffmpeg = spawn('ffmpeg', [
                 '-y',
@@ -92,9 +105,23 @@ export const extractAudio = async ({
                     console.log(`[Worker] Audio extraction success: ${localAudioPath} (${audioStats.size} bytes)`);
                     resolve();
                 } else {
+                    const cleanStderr = stderrOutput.trim();
                     console.error(`[Worker] FFmpeg failed with code ${code}`);
-                    console.error(`[Worker] FFmpeg stderr:`, stderrOutput);
-                    reject(new Error(`Audio extraction failed (FFmpeg exit code ${code}). Video format may be unsupported or corrupted.`));
+                    console.error(`[Worker] FFmpeg stderr:`, cleanStderr);
+
+                    // Specific error mapping for common FFmpeg issues
+                    let errorMsg = `Audio extraction failed (FFmpeg exit code ${code}).`;
+                    if (cleanStderr.includes("Invalid data found")) {
+                        errorMsg = "Transcription failed: The video format is invalid or corrupted.";
+                    } else if (cleanStderr.includes("Output file is empty")) {
+                        errorMsg = "Transcription failed: The video contains no audio track.";
+                    } else if (cleanStderr.includes("Permission denied")) {
+                        errorMsg = "Transcription failed: System permission error during processing.";
+                    } else {
+                        errorMsg += ` Details: ${cleanStderr.split('\n').pop() || 'Unknown error'}`;
+                    }
+
+                    reject(new Error(errorMsg));
                 }
             });
 

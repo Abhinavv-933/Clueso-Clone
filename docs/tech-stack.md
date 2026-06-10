@@ -5,7 +5,7 @@
 *   **Frontend**: Next.js (App Router) + TypeScript + Tailwind CSS
 *   **Backend**: Node.js + Express + TypeScript
 *   **Database**: MongoDB + Mongoose
-*   **Queue/Jobs**: BullMQ + Redis
+*   **Queue/Jobs**:  HTTP request(Database-backed asynchronous processing) 
 *   **AI Services**: OpenAI Whisper (Audio-to-Text) + GPT-4o-mini/GPT-4o (Content Gen)
 *   **Storage**: AWS S3 (for video/audio files)
 *   **Authentication**: Clerk

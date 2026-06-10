@@ -38,6 +38,32 @@ export const createJob = async (
             return res.status(400).json({ message: 'Upload is not yet complete' });
         }
 
+        // 1. Check for existing non-failed jobs for this project
+        if (projectId) {
+            const existingJob = await CluesoJobModel.findOne({
+                projectId,
+                userId,
+                status: { $ne: 'FAILED' }
+            }).sort({ createdAt: -1 });
+
+            if (existingJob) {
+                console.log(`[JobController] Reusing existing job ${existingJob.jobId} for project ${projectId}`);
+                // Ensure processing is still running if it was just created or stuck
+                // (Optional: we could re-trigger CluesoService.processJob if it's UPLOADED)
+                if (existingJob.status === 'UPLOADED') {
+                    CluesoService.processJob(existingJob.jobId).catch(() => { });
+                }
+
+                return res.status(200).json({
+                    jobId: existingJob.jobId,
+                    uploadId: existingJob.inputUploadId,
+                    inputVideoS3Key: existingJob.inputVideoS3Key,
+                    status: existingJob.status,
+                    isReused: true
+                });
+            }
+        }
+
         const jobId = randomUUID();
 
         // Save to database

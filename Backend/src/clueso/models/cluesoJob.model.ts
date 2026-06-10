@@ -10,6 +10,7 @@ export interface ICluesoJob extends Document {
     status: JobStatus;
     audioS3Key?: string;
     transcriptS3Key?: string;
+    transcriptText?: string;
     improvedScriptS3Key?: string;
     aiVoiceS3Key?: string;
     finalVideoS3Key?: string;
@@ -48,6 +49,7 @@ const cluesoJobSchema = new Schema<ICluesoJob>(
             enum: [
                 'UPLOADED',
                 'AUDIO_EXTRACTED',
+                'TRANSCRIBING',
                 'TRANSCRIBED',
                 'SCRIPT_IMPROVED',
                 'VOICE_GENERATED',
@@ -59,6 +61,7 @@ const cluesoJobSchema = new Schema<ICluesoJob>(
         },
         audioS3Key: String,
         transcriptS3Key: String,
+        transcriptText: String,
         improvedScriptS3Key: String,
         aiVoiceS3Key: String,
         finalVideoS3Key: String,

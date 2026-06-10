@@ -58,6 +58,7 @@ export const getTranscript = async (req: Request, res: Response) => {
 
         // Check if transcript key exists
         if (!job.transcriptS3Key) {
+            console.log(`[GetTranscript] 202: Job ${job.jobId} is ${job.status} but transcriptS3Key is missing`);
             return res.status(202).json({
                 success: true,
                 status: 'PROCESSING',
@@ -78,6 +79,7 @@ export const getTranscript = async (req: Request, res: Response) => {
             }
         } catch (s3Error: any) {
             if (s3Error.name === 'NoSuchKey' || s3Error.Code === 'NoSuchKey') {
+                console.log(`[GetTranscript] 202: S3 file not found for key ${job.transcriptS3Key}`);
                 return res.status(202).json({
                     success: true,
                     status: 'PROCESSING',
@@ -92,6 +94,7 @@ export const getTranscript = async (req: Request, res: Response) => {
         }
 
         if (!transcriptText || transcriptText.trim().length === 0) {
+            console.log(`[GetTranscript] 202: S3 file is empty for key ${job.transcriptS3Key}`);
             return res.status(202).json({
                 success: true,
                 status: 'PROCESSING',
@@ -115,9 +118,10 @@ export const getTranscript = async (req: Request, res: Response) => {
             };
         }
 
-        // Validate content
-        if (!transcriptData.text || transcriptData.text.trim().length < 10) {
-            console.log(`[GetTranscript] Transcript text too short (${transcriptData.text?.length || 0} chars)`);
+        // Validate content - ONLY trigger 202 for "short" text if job is NOT yet TRANSCRIBED
+        const isFinished = ['TRANSCRIBED', 'COMPLETED', 'SCRIPT_IMPROVED'].includes(job.status);
+        if (!isFinished && (!transcriptData.text || transcriptData.text.trim().length < 10)) {
+            console.log(`[GetTranscript] 202: Transcript text too short (${transcriptData.text?.length || 0} chars) and job ${job.jobId} still ${job.status}`);
             return res.status(202).json({
                 success: true,
                 status: 'PROCESSING',
