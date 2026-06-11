@@ -13,10 +13,9 @@ const envSchema = z.object({
     AWS_SECRET_ACCESS_KEY: z.string().min(1),
     AWS_REGION: z.string().min(1),
     AWS_S3_BUCKET_NAME: z.string().min(1),
-    OPENAI_API_KEY: z.string().optional().or(z.literal('')),
+    GROQ_API_KEY: z.string().min(1),  // ← add this
     ENABLE_SCRIPT_IMPROVEMENT: z.preprocess((val) => val === 'true' || val === true, z.boolean()).default(false),
 });
-
 
 const parsedEnv = envSchema.safeParse(process.env);
 
