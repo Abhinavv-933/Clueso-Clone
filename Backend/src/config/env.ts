@@ -9,10 +9,7 @@ const envSchema = z.object({
     MONGO_URI: z.string().url(),
     CLERK_PUBLISHABLE_KEY: z.string().min(1),
     CLERK_SECRET_KEY: z.string().min(1),
-    AWS_ACCESS_KEY_ID: z.string().min(1),
-    AWS_SECRET_ACCESS_KEY: z.string().min(1),
-    AWS_REGION: z.string().min(1),
-    AWS_S3_BUCKET_NAME: z.string().min(1),
+    CLOUDINARY_URL: z.string().min(1),
     GROQ_API_KEY: z.string().min(1),  // ← add this
     ENABLE_SCRIPT_IMPROVEMENT: z.preprocess((val) => val === 'true' || val === true, z.boolean()).default(false),
 });
@@ -25,3 +22,8 @@ if (!parsedEnv.success) {
 }
 
 export const env = parsedEnv.data;
+
+console.log(
+    `[env] GROQ_API_KEY loaded: ${env.GROQ_API_KEY ? `yes (${env.GROQ_API_KEY.slice(0, 4)}...${env.GROQ_API_KEY.slice(-4)}, len=${env.GROQ_API_KEY.length})` : 'NO'}`
+);
+console.log(`[env] CLOUDINARY_URL loaded: ${env.CLOUDINARY_URL ? 'yes' : 'NO'}`);

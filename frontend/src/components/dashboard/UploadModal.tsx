@@ -46,8 +46,8 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
             const token = await getToken();
             const apiUrl = API_URL;
 
-            // 1. Get Presigned URL
-            console.log(`[UploadModal] Getting presigned URL from: ${apiUrl}/uploads/presigned-url`);
+            // 1. Get signed Cloudinary upload params
+            console.log(`[UploadModal] Getting signed upload params from: ${apiUrl}/uploads/presigned-url`);
             console.log(`[UploadModal] Request body:`, {
                 filename: file.name,
                 contentType: file.type,
@@ -68,15 +68,15 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
                 }),
             });
 
-            console.log(`[UploadModal] Presigned URL response status:`, presignRes.status);
+            console.log(`[UploadModal] Signed upload params response status:`, presignRes.status);
 
             if (!presignRes.ok) {
                 // Log the actual error response
                 const errorText = await presignRes.text();
-                console.error(`[UploadModal] Failed to get upload URL. Status: ${presignRes.status}`);
+                console.error(`[UploadModal] Failed to get upload params. Status: ${presignRes.status}`);
                 console.error(`[UploadModal] Error response:`, errorText);
 
-                let errorMessage = "Failed to get upload URL";
+                let errorMessage = "Failed to get upload params";
                 try {
                     const errorJson = JSON.parse(errorText);
                     errorMessage = errorJson.message || errorMessage;
@@ -88,25 +88,37 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
                 throw new Error(`${errorMessage} (Status: ${presignRes.status})`);
             }
 
-            const { uploadUrl, s3Key } = await presignRes.json();
-            console.log(`[UploadModal] Got presigned URL successfully. S3 Key:`, s3Key);
+            const { uploadUrl, publicId, timestamp, signature, apiKey } = await presignRes.json();
+            console.log(`[UploadModal] Got signed upload params successfully. Public ID:`, publicId);
 
-            // 2. Upload to S3
-            console.log(`[UploadModal] Uploading to S3...`);
+            // 2. Upload to Cloudinary
+            console.log(`[UploadModal] Uploading to Cloudinary...`);
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("public_id", publicId);
+            formData.append("timestamp", String(timestamp));
+            formData.append("signature", signature);
+            formData.append("api_key", apiKey);
+            formData.append("type", "authenticated");
+
             const uploadRes = await fetch(uploadUrl, {
-                method: "PUT",
-                body: file,
-                headers: {
-                    "Content-Type": file.type,
-                },
+                method: "POST",
+                body: formData,
             });
 
             if (!uploadRes.ok) {
-                console.error(`[UploadModal] S3 upload failed. Status:`, uploadRes.status);
-                throw new Error(`Failed to upload to S3 (Status: ${uploadRes.status})`);
+                const errorBody = await uploadRes.text().catch(() => "");
+                console.error(`[UploadModal] Cloudinary upload failed. Status:`, uploadRes.status, "Body:", errorBody);
+                let cloudinaryMessage = "";
+                try {
+                    cloudinaryMessage = JSON.parse(errorBody)?.error?.message || "";
+                } catch {
+                    cloudinaryMessage = errorBody;
+                }
+                throw new Error(`Failed to upload to Cloudinary (Status: ${uploadRes.status})${cloudinaryMessage ? `: ${cloudinaryMessage}` : ""}`);
             }
 
-            console.log(`[UploadModal] S3 upload successful`);
+            console.log(`[UploadModal] Cloudinary upload successful`);
 
             // 2.5 Save Metadata to get uploadId
             const metadataRes = await fetch(`${apiUrl}/uploads/metadata`, {
@@ -116,7 +128,7 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
                     Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                    fileKey: s3Key,
+                    fileKey: publicId,
                     fileName: file.name,
                     fileType: file.type,
                     fileSize: file.size,
@@ -131,7 +143,7 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
 
             // 3. Create Project
             console.log(`[UploadModal] Creating project with uploadId:`, uploadId);
-            const projectId = await createProject(file.name, s3Key, uploadId);
+            const projectId = await createProject(file.name, publicId, uploadId);
             console.log(`[UploadModal] Project created:`, projectId);
 
             onClose();

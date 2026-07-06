@@ -11,7 +11,7 @@ const projectSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    s3Key: {
+    cloudinaryPublicId: {
       type: String,
       required: true,
     },

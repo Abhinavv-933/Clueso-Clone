@@ -1,31 +1,28 @@
 import fs from 'fs';
 import path from 'path';
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { Readable } from 'stream';
-import { s3Client } from '../../config/s3';
-import { env } from '../../config/env';
+import { downloadTextFromCloudinary, uploadFileToCloudinary } from '../../config/cloudinary';
 import { PiperService } from '../services/piper.service';
 import { ImprovedScript, VoiceoverAsset, VoiceoverSegment } from '../../../shared';
 
 interface VoiceoverWorkerInput {
     jobId: string;
     userId: string;
-    improvedScriptS3Key: string;
+    improvedScriptPublicId: string;
 }
 
 interface VoiceoverWorkerOutput {
     voiceoverAsset: VoiceoverAsset;
-    voiceoverPrefixS3Key: string;
+    voiceoverPrefixPublicId: string;
 }
 
 /**
- * Downloads the improved script from S3, generates individual audio segments using Piper TTS,
- * and uploads them back to S3.
+ * Downloads the improved script from Cloudinary, generates individual audio segments using Piper TTS,
+ * and uploads them back to Cloudinary.
  */
-export const generateVoiceoverFromS3 = async ({
+export const generateVoiceoverFromCloudinary = async ({
     jobId,
     userId,
-    improvedScriptS3Key,
+    improvedScriptPublicId,
 }: VoiceoverWorkerInput): Promise<VoiceoverWorkerOutput> => {
     console.log(`[VoiceoverWorker] Starting voice generation for Job ${jobId}`);
 
@@ -39,25 +36,9 @@ export const generateVoiceoverFromS3 = async ({
             fs.mkdirSync(tempDir, { recursive: true });
         }
 
-        // 2. Download Improved Script from S3
-        console.log(`[VoiceoverWorker] Downloading improved script: ${improvedScriptS3Key}`);
-        const getCommand = new GetObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: improvedScriptS3Key,
-        });
-
-        const getResponse = await s3Client.send(getCommand);
-        if (!getResponse.Body) throw new Error('S3 response body is empty');
-
-        const streamToString = (stream: Readable): Promise<string> =>
-            new Promise((resolve, reject) => {
-                const chunks: any[] = [];
-                stream.on('data', (chunk) => chunks.push(chunk));
-                stream.on('error', reject);
-                stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-            });
-
-        const scriptDataRaw = await streamToString(getResponse.Body as Readable);
+        // 2. Download Improved Script from Cloudinary
+        console.log(`[VoiceoverWorker] Downloading improved script: ${improvedScriptPublicId}`);
+        const scriptDataRaw = await downloadTextFromCloudinary(improvedScriptPublicId, 'raw');
         const improvedScript: ImprovedScript = JSON.parse(scriptDataRaw);
 
         // 3. Process each segment
@@ -71,26 +52,18 @@ export const generateVoiceoverFromS3 = async ({
             console.log(`[VoiceoverWorker] Generating audio for segment ${i}...`);
             await PiperService.generateVoice(segment.improvedText, localWavPath);
 
-            // 4. Upload to S3
-            const audioS3Key = `clueso/voiceovers/${userId}/${jobId}/segment_${i}.wav`;
-            console.log(`[VoiceoverWorker] Uploading segment ${i} to S3: ${audioS3Key}`);
+            // 4. Upload to Cloudinary
+            const audioPublicId = `clueso/voiceovers/${userId}/${jobId}/segment_${i}`;
+            console.log(`[VoiceoverWorker] Uploading segment ${i} to Cloudinary: ${audioPublicId}`);
 
-            const audioStream = fs.createReadStream(localWavPath);
-            const putCommand = new PutObjectCommand({
-                Bucket: env.AWS_S3_BUCKET_NAME,
-                Key: audioS3Key,
-                Body: audioStream,
-                ContentType: 'audio/wav',
-            });
-
-            await s3Client.send(putCommand);
+            await uploadFileToCloudinary(localWavPath, audioPublicId, 'video');
 
             // Record metadata
             voiceoverSegments.push({
                 startTime: segment.startTime,
                 endTime: segment.endTime,
                 text: segment.improvedText,
-                audioS3Key: audioS3Key,
+                audioPublicId: audioPublicId,
             });
         }
 
@@ -109,13 +82,13 @@ export const generateVoiceoverFromS3 = async ({
             updatedAt: new Date(),
         };
 
-        const voiceoverPrefixS3Key = `clueso/voiceovers/${userId}/${jobId}/`;
+        const voiceoverPrefixPublicId = `clueso/voiceovers/${userId}/${jobId}/`;
 
         console.log(`[VoiceoverWorker] Successfully generated voiceover asset for Job ${jobId}`);
 
         return {
             voiceoverAsset,
-            voiceoverPrefixS3Key,
+            voiceoverPrefixPublicId,
         };
 
     } catch (error) {

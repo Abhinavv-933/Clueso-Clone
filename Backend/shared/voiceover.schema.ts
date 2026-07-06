@@ -21,9 +21,9 @@ export const VoiceoverSegmentSchema = z.object({
     text: z.string(),
 
     /**
-     * The S3 key for the individual audio file of this segment.
+     * The Cloudinary public_id for the individual audio file of this segment.
      */
-    audioS3Key: z.string(),
+    audioPublicId: z.string(),
 });
 
 /**
@@ -82,10 +82,10 @@ export const VoiceoverAssetSchema = z.object({
     segments: z.array(VoiceoverSegmentSchema),
 
     /**
-     * Optional S3 key for the single, concatenated audio file containing all segments.
+     * Optional Cloudinary public_id for the single, concatenated audio file containing all segments.
      * Useful for direct playback or final merging.
      */
-    combinedAudioS3Key: z.string().optional(),
+    combinedAudioPublicId: z.string().optional(),
 
     /**
      * Timestamp of when this asset was generated.

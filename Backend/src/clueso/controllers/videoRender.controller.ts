@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { JobLifecycleService } from '../services/jobLifecycle.service';
-import { renderFinalVideoFromS3 } from '../workers/videoRender.worker';
+import { renderFinalVideoFromCloudinary } from '../workers/videoRender.worker';
 
 /**
  * Controller to handle final video rendering requests.
@@ -41,10 +41,10 @@ export const handleVideoRendering = async (req: Request, res: Response) => {
         }
 
         // 6. Resolve required inputs
-        const originalVideoS3Key = job.videoS3Key; // Assuming original video is stored here
-        const voiceoverS3Key = job.voiceoverS3Key;
+        const originalVideoPublicId = job.videoPublicId; // Assuming original video is stored here
+        const voiceoverPublicId = job.voiceoverPublicId;
 
-        if (!originalVideoS3Key || !voiceoverS3Key) {
+        if (!originalVideoPublicId || !voiceoverPublicId) {
             return res.status(400).json({
                 message: 'Missing required artifacts (video or voiceover) for rendering'
             });
@@ -53,11 +53,11 @@ export const handleVideoRendering = async (req: Request, res: Response) => {
         console.log(`[VideoRenderController] Starting final rendering for Job ${jobId}`);
 
         // 7. Invoke videoRender.worker
-        const { renderedVideoS3Key, renderedVideoAsset } = await renderFinalVideoFromS3({
+        const { renderedVideoPublicId, renderedVideoAsset } = await renderFinalVideoFromCloudinary({
             jobId,
             userId,
-            originalVideoS3Key,
-            voiceoverS3Key,
+            originalVideoPublicId,
+            voiceoverPublicId,
         });
 
         // 8. Call updateJobAfterVideoRender
@@ -67,7 +67,7 @@ export const handleVideoRendering = async (req: Request, res: Response) => {
         return res.status(200).json({
             jobId,
             status: "VIDEO_RENDERED",
-            renderedVideoS3Key
+            renderedVideoPublicId
         });
 
     } catch (error) {

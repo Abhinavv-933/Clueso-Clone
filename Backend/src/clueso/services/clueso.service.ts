@@ -1,19 +1,15 @@
 import fs from 'fs';
-import path from 'path';
-import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { Readable } from 'stream';
-import { pipeline } from 'stream/promises';
-import { s3Client } from '../../config/s3';
+import { uploadFileToCloudinary, uploadContentToCloudinary } from '../../config/cloudinary';
 import { env } from '../../config/env';
 import { CluesoJobModel } from '../models/cluesoJob.model';
 import { JobStatus } from '../types/jobStatus';
 
 // Import workers
 import { extractAudio } from '../workers/extractAudio.worker';
-import { transcribeAudioFromS3 } from '../workers/transcribeAudio.worker';
-import { improveScriptFromS3 } from '../workers/improveScript.worker';
+import { transcribeAudioFromCloudinary } from '../workers/transcribeAudio.worker';
+import { improveScriptFromCloudinary } from '../workers/improveScript.worker';
 import { generateVoice } from '../workers/generateVoice.worker';
-import { renderFinalVideoFromS3 } from '../workers/videoRender.worker';
+import { renderFinalVideoFromCloudinary } from '../workers/videoRender.worker';
 import { JobLifecycleService } from './jobLifecycle.service';
 
 export class CluesoService {
@@ -32,24 +28,24 @@ export class CluesoService {
 
             // 1. Extract Audio
             console.log(`[CluesoService] [Step 1/4] Initiating audio extraction for Job ${jobId}...`);
-            const { audioS3Key } = await extractAudio({
+            const { audioPublicId } = await extractAudio({
                 jobId: job.jobId,
                 userId: job.userId,
-                inputVideoS3Key: job.inputVideoS3Key,
+                inputVideoPublicId: job.inputVideoPublicId,
             });
 
-            console.log(`[CluesoService] [Step 1/4] Audio extraction successful for Job ${jobId}. Key: ${audioS3Key}`);
+            console.log(`[CluesoService] [Step 1/4] Audio extraction successful for Job ${jobId}. Key: ${audioPublicId}`);
 
-            // Explicitly persist Audio S3 Key and New Status
+            // Explicitly persist Audio public_id and New Status
             await CluesoJobModel.updateOne(
                 { jobId },
                 {
                     status: 'AUDIO_EXTRACTED',
-                    audioS3Key,
+                    audioPublicId,
                     updatedAt: new Date()
                 }
             );
-            await JobLifecycleService.updateJobAfterAudioExtraction(jobId, audioS3Key);
+            await JobLifecycleService.updateJobAfterAudioExtraction(jobId, audioPublicId);
 
             // 2. Transcription (Detached workflow starts here)
             // We move all subsequent steps into a try/catch block to ensure status handles failures
@@ -58,10 +54,10 @@ export class CluesoService {
 
             // Proceed with transcription
             console.log(`[CluesoService] [Step 2/4] Invoking transcription provider for Job ${jobId}...`);
-            const { transcriptS3Key, transcript } = await transcribeAudioFromS3({
+            const { transcriptPublicId, transcript } = await transcribeAudioFromCloudinary({
                 jobId: job.jobId,
                 userId: job.userId,
-                audioS3Key: audioS3Key,
+                audioPublicId: audioPublicId,
             });
 
             console.log(`[CluesoService] [Step 2/4] Provider response received for Job ${jobId}. Length: ${transcript.length}`);
@@ -70,7 +66,7 @@ export class CluesoService {
             await CluesoJobModel.updateOne(
                 { jobId },
                 {
-                    transcriptS3Key,
+                    transcriptPublicId,
                     transcriptText: transcript,
                     updatedAt: new Date()
                 }
@@ -78,7 +74,7 @@ export class CluesoService {
 
             // Finalize transcription status
             await CluesoJobModel.updateOne({ jobId }, { status: 'TRANSCRIBED', updatedAt: new Date() });
-            await JobLifecycleService.updateJobAfterTranscription(jobId, transcriptS3Key);
+            await JobLifecycleService.updateJobAfterTranscription(jobId, transcriptPublicId);
             console.log(`[CluesoService] [Step 3/4] Job marked as TRANSCRIBED: ${jobId}`);
 
             // 3. Mark as COMPLETED
@@ -86,7 +82,7 @@ export class CluesoService {
             console.log(`[CluesoService] [Step 4/4] Job ${jobId} reached terminal success state: COMPLETED.`);
 
             // 4. Bonus Steps (Non-blocking)
-            this.runBonusSteps(jobId, job.userId, job.inputVideoS3Key, transcript, transcriptS3Key).catch(err => {
+            this.runBonusSteps(jobId, job.userId, job.inputVideoPublicId, transcript, transcriptPublicId).catch(err => {
                 console.error(`[CluesoService] Bonus steps failed (non-fatal) for Job ${jobId}:`, err);
             });
 
@@ -112,9 +108,9 @@ export class CluesoService {
     private static async runBonusSteps(
         jobId: string,
         userId: string,
-        inputVideoS3Key: string,
+        inputVideoPublicId: string,
         transcript: string,
-        transcriptS3Key: string
+        transcriptPublicId: string
     ) {
         try {
             let improvedScriptContent = transcript;
@@ -123,17 +119,17 @@ export class CluesoService {
                 console.log(`[CluesoService] [Bonus] Improving script for Job ${jobId}...`);
                 await this.updateStatus(jobId, 'SCRIPT_IMPROVED');
 
-                const improvedScript = await improveScriptFromS3({
+                const improvedScript = await improveScriptFromCloudinary({
                     jobId,
                     userId,
-                    transcriptS3Key
+                    transcriptPublicId
                 });
 
                 improvedScriptContent = JSON.stringify(improvedScript);
-                const improvedScriptKey = `clueso/script/${userId}/${jobId}.txt`;
-                await this.uploadContentToS3(improvedScriptContent, improvedScriptKey, 'text/plain');
+                const improvedScriptPublicId = `clueso/script/${userId}/${jobId}`;
+                await uploadContentToCloudinary(improvedScriptContent, improvedScriptPublicId);
 
-                await CluesoJobModel.updateOne({ jobId }, { improvedScriptS3Key: improvedScriptKey });
+                await CluesoJobModel.updateOne({ jobId }, { improvedScriptPublicId });
             }
 
             // Voiceover Generation
@@ -141,21 +137,21 @@ export class CluesoService {
             await this.updateStatus(jobId, 'VOICE_GENERATED');
             const localVoicePath = await generateVoice({ jobId, text: improvedScriptContent });
 
-            const aiVoiceKey = `clueso/voice/${userId}/${jobId}.mp3`;
-            await this.uploadToS3(localVoicePath, aiVoiceKey, 'audio/mpeg');
-            await CluesoJobModel.updateOne({ jobId }, { aiVoiceS3Key: aiVoiceKey });
+            const aiVoicePublicId = `clueso/voice/${userId}/${jobId}`;
+            await uploadFileToCloudinary(localVoicePath, aiVoicePublicId, 'video');
+            await CluesoJobModel.updateOne({ jobId }, { aiVoicePublicId });
 
             // Final Video Render
             console.log(`[CluesoService] [Bonus] Rendering final video for Job ${jobId}...`);
             await this.updateStatus(jobId, 'VIDEO_MERGED');
-            const { renderedVideoS3Key } = await renderFinalVideoFromS3({
+            const { renderedVideoPublicId } = await renderFinalVideoFromCloudinary({
                 jobId,
                 userId,
-                originalVideoS3Key: inputVideoS3Key,
-                voiceoverS3Key: aiVoiceKey
+                originalVideoPublicId: inputVideoPublicId,
+                voiceoverPublicId: aiVoicePublicId
             });
 
-            await CluesoJobModel.updateOne({ jobId }, { finalVideoS3Key: renderedVideoS3Key });
+            await CluesoJobModel.updateOne({ jobId }, { finalVideoPublicId: renderedVideoPublicId });
             await this.updateStatus(jobId, 'COMPLETED');
 
             console.log(`[CluesoService] [Bonus] All extra steps finalized for Job ${jobId}`);
@@ -169,51 +165,6 @@ export class CluesoService {
 
     private static async updateStatus(jobId: string, status: JobStatus) {
         await CluesoJobModel.updateOne({ jobId }, { status, updatedAt: new Date() });
-    }
-
-    private static async uploadToS3(localPath: string, key: string, contentType: string) {
-        console.log(`[CluesoService] Uploading artifact to S3: ${key}`);
-        const stream = fs.createReadStream(localPath);
-        const command = new PutObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: key,
-            Body: stream,
-            ContentType: contentType,
-        });
-        await s3Client.send(command);
-    }
-
-    private static async uploadContentToS3(content: string, key: string, contentType: string) {
-        console.log(`[CluesoService] Uploading text artifact to S3: ${key}`);
-        const command = new PutObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: key,
-            Body: content,
-            ContentType: contentType,
-        });
-        await s3Client.send(command);
-    }
-
-    private static async downloadFromS3(key: string, localFilename: string): Promise<string> {
-        const tempDir = path.join(process.cwd(), 'temp');
-        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-
-        const localPath = path.join(tempDir, localFilename);
-        console.log(`[CluesoService] Downloading from S3: ${key} -> ${localPath}`);
-
-        const command = new GetObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: key,
-        });
-
-        const response = await s3Client.send(command);
-        if (!response.Body) throw new Error('S3 body is empty');
-
-        const writeStream = fs.createWriteStream(localPath);
-        // @ts-ignore
-        await pipeline(response.Body as Readable, writeStream);
-
-        return localPath;
     }
 
     private static cleanup(...paths: string[]) {

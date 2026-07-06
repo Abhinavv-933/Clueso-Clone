@@ -16,7 +16,7 @@ export const ProjectSchema = z.object({
     userId: z.string(),
     title: z.string(),
     status: ProjectStatus,
-    s3Key: z.string(),
+    cloudinaryPublicId: z.string(),
     uploadId: z.string().optional(),
     error: z.string().optional(),
     createdAt: z.date(),

@@ -1,48 +1,28 @@
-import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { s3Client } from '../../config/s3';
-import { env } from '../../config/env';
+import { downloadTextFromCloudinary } from '../../config/cloudinary';
 import { OllamaService } from '../services/ollama.service';
 import { TranscriptSegment, ImprovedScript, ImprovedScriptSegment } from '../../../shared';
-import { Readable } from 'stream';
 
 interface ImproveScriptInput {
     jobId: string;
     userId: string;
-    transcriptS3Key: string;
+    transcriptPublicId: string;
 }
 
 /**
- * Downloads a transcript from S3, improves segments in batches using Ollama,
+ * Downloads a transcript from Cloudinary, improves segments in batches using Ollama,
  * and assembles the final ImprovedScript object.
  */
-export const improveScriptFromS3 = async ({
+export const improveScriptFromCloudinary = async ({
     jobId,
     userId,
-    transcriptS3Key,
+    transcriptPublicId,
 }: ImproveScriptInput): Promise<ImprovedScript> => {
     console.log(`[ImproveScriptWorker] Starting improvement for Job ${jobId}`);
 
     try {
-        // 1. Download Transcript from S3
-        console.log(`[ImproveScriptWorker] Downloading transcript from S3: ${transcriptS3Key}`);
-        const getCommand = new GetObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: transcriptS3Key,
-        });
-
-        const getResponse = await s3Client.send(getCommand);
-        if (!getResponse.Body) throw new Error('S3 response body is empty');
-
-        // Helper to read stream to string
-        const streamToString = (stream: Readable): Promise<string> =>
-            new Promise((resolve, reject) => {
-                const chunks: any[] = [];
-                stream.on('data', (chunk) => chunks.push(chunk));
-                stream.on('error', reject);
-                stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-            });
-
-        const transcriptText = await streamToString(getResponse.Body as Readable);
+        // 1. Download Transcript from Cloudinary
+        console.log(`[ImproveScriptWorker] Downloading transcript from Cloudinary: ${transcriptPublicId}`);
+        const transcriptText = await downloadTextFromCloudinary(transcriptPublicId, 'raw');
 
         // Removed JSON.parse as transcript is now plain text (Task 7)
         // const transcript = JSON.parse(transcriptDataRaw);

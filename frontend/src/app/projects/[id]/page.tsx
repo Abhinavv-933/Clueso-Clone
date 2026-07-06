@@ -34,7 +34,7 @@ interface ProjectDetail {
     name: string;
     status: string;
     createdAt: string;
-    s3Key: string;
+    cloudinaryPublicId: string;
     fileUrl?: string; // Signed URL from backend
     uploadId?: string;
     jobId?: string;
@@ -110,7 +110,7 @@ export default function ProjectDetailPage() {
                 name: data.title,
                 status: data.status,
                 createdAt: data.createdAt,
-                s3Key: data.s3Key,
+                cloudinaryPublicId: data.cloudinaryPublicId,
                 fileUrl: data.fileUrl,
                 uploadId: data.uploadId,
                 jobId: data.jobId,

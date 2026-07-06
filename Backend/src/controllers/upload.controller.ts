@@ -1,13 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import path from 'path';
 import { UploadModel } from '../models/upload.model';
 import { ShareModel } from '../models/share.model';
 
-import { s3Client } from '../config/s3';
-import { env } from '../config/env';
+import { getSignedUploadParams, getSignedDeliveryUrl, getResourceTypeForMime } from '../config/cloudinary';
 
 /**
  * Allowed MIME types for uploads
@@ -81,32 +79,21 @@ export const getPresignedUploadUrl = async (
 
         console.log('[Upload] MIME type accepted:', contentType);
 
-        // Basic filename sanitization
-        const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '');
+        // Basic filename sanitization (strip extension - Cloudinary public_ids shouldn't include one)
+        const safeFilename = path.parse(filename).name.replace(/[^a-zA-Z0-9._-]/g, '');
 
-        const s3Key = `uploads/${userId}/${randomUUID()}-${safeFilename}`;
+        const publicId = `clueso/uploads/${userId}/${randomUUID()}-${safeFilename}`;
 
-        const command = new PutObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: s3Key,
-            ContentType: contentType,
-        });
+        const signedParams = getSignedUploadParams(publicId);
 
-        const uploadUrl = await getSignedUrl(s3Client, command, {
-            expiresIn: 60 * 5, // 5 minutes
-        });
-
-        return res.status(200).json({
-            uploadUrl,
-            s3Key,
-        });
+        return res.status(200).json(signedParams);
     } catch (error) {
         next(error);
     }
 };
 
 /**
- * Saves file metadata after successful S3 upload
+ * Saves file metadata after successful Cloudinary upload
  */
 export const saveUploadMetadata = async (
     req: Request,
@@ -167,7 +154,7 @@ export const listUploads = async (
     }
 };
 /**
- * Generates a signed GET URL for file preview
+ * Generates a signed delivery URL for file preview
  */
 export const getDownloadUrl = async (
     req: Request,
@@ -191,14 +178,11 @@ export const getDownloadUrl = async (
             return res.status(404).json({ message: 'File not found or access denied' });
         }
 
-        const command = new GetObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: fileKey,
-        });
-
-        const downloadUrl = await getSignedUrl(s3Client, command, {
-            expiresIn: 60 * 60, // 1 hour
-        });
+        const downloadUrl = getSignedDeliveryUrl(
+            upload.fileKey,
+            getResourceTypeForMime(upload.fileType),
+            60 * 60 // 1 hour
+        );
 
         return res.status(200).json({ downloadUrl });
     } catch (error) {
@@ -295,15 +279,12 @@ export const resolveShareToken = async (
 
         const upload = share.uploadId as any; // Cast because of populate
 
-        // Generate signed URL for S3
-        const command = new GetObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: upload.fileKey,
-        });
-
-        const mediaUrl = await getSignedUrl(s3Client, command, {
-            expiresIn: 60 * 60, // 1 hour
-        });
+        // Generate signed delivery URL via Cloudinary
+        const mediaUrl = getSignedDeliveryUrl(
+            upload.fileKey,
+            getResourceTypeForMime(upload.fileType),
+            60 * 60 // 1 hour
+        );
 
         return res.status(200).json({
             fileName: upload.fileName,

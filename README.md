@@ -142,9 +142,7 @@ npm run dev
 ```env
 PORT=8000
 MONGODB_URI=your_mongo_uri
-AWS_ACCESS_KEY_ID=your_key
-AWS_SECRET_ACCESS_KEY=your_secret
-AWS_S3_BUCKET_NAME=your_bucket
+CLOUDINARY_URL=cloudinary://your_api_key:your_api_secret@your_cloud_name
 OPENAI_API_KEY=your_openai_key
 CLERK_SECRET_KEY=your_clerk_secret
 ```

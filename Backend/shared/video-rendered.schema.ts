@@ -25,14 +25,14 @@ export const VideoRenderedAssetSchema = z.object({
      */
     input: z.object({
         /**
-         * The S3 key of the original uploaded video.
+         * The Cloudinary public_id of the original uploaded video.
          */
-        originalVideoS3Key: z.string(),
+        originalVideoPublicId: z.string(),
 
         /**
-         * The S3 key of the generated voiceover (concatenated or prefix).
+         * The Cloudinary public_id of the generated voiceover (concatenated or prefix).
          */
-        voiceoverS3Key: z.string(),
+        voiceoverPublicId: z.string(),
     }),
 
     /**
@@ -40,9 +40,9 @@ export const VideoRenderedAssetSchema = z.object({
      */
     output: z.object({
         /**
-         * The S3 key of the final rendered video file.
+         * The Cloudinary public_id of the final rendered video file.
          */
-        renderedVideoS3Key: z.string(),
+        renderedVideoPublicId: z.string(),
 
         /**
          * The file format of the output (e.g., "mp4").

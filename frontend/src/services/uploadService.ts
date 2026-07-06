@@ -1,13 +1,16 @@
 import axios from "axios";
-import { env } from "../config/env";
 
 /**
- * Service for handling file uploads to S3 via presigned URLs
+ * Service for handling file uploads to Cloudinary via signed direct uploads
  */
 
-export interface PresignedUrlResponse {
+export interface SignedUploadParams {
     uploadUrl: string;
-    fileKey: string;
+    publicId: string;
+    timestamp: number;
+    signature: string;
+    apiKey: string;
+    cloudName: string;
 }
 
 export interface IUpload {
@@ -21,17 +24,17 @@ export interface IUpload {
 }
 
 /**
- * Fetches a presigned upload URL from the backend
+ * Fetches signed Cloudinary upload params from the backend
  * @param fileName - Original name of the file
  * @param fileType - MIME type of the file
  * @param token - Optional Clerk session token for authentication
  */
-export const getPresignedUrl = async (
+export const getSignedUploadParams = async (
     fileName: string,
     fileType: string,
     fileSize: number,
     token?: string
-): Promise<PresignedUrlResponse> => {
+): Promise<SignedUploadParams> => {
     const response = await fetch("/api/uploads/presigned-url", {
         method: "POST",
         headers: {
@@ -47,32 +50,32 @@ export const getPresignedUrl = async (
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ message: "Unknown error" }));
-        throw new Error(error.message || `Failed to get presigned URL: ${response.statusText}`);
+        throw new Error(error.message || `Failed to get upload params: ${response.statusText}`);
     }
 
-    const data = await response.json();
-
-    return {
-        uploadUrl: data.uploadUrl,
-        fileKey: data.s3Key,
-    };
+    return await response.json();
 };
 
 /**
- * Uploads a file directly to S3 using a presigned URL with progress tracking
- * @param uploadUrl - The presigned URL provided by the backend
+ * Uploads a file directly to Cloudinary using signed upload params, with progress tracking
+ * @param params - The signed upload params provided by the backend
  * @param file - The File object to upload
  * @param onProgress - Optional callback for upload progress (0-100)
  */
-export const uploadToS3 = async (
-    uploadUrl: string,
+export const uploadToCloudinary = async (
+    params: SignedUploadParams,
     file: File,
     onProgress?: (progress: number) => void
 ): Promise<void> => {
-    await axios.put(uploadUrl, file, {
-        headers: {
-            "Content-Type": file.type,
-        },
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("public_id", params.publicId);
+    formData.append("timestamp", String(params.timestamp));
+    formData.append("signature", params.signature);
+    formData.append("api_key", params.apiKey);
+    formData.append("type", "authenticated");
+
+    await axios.post(params.uploadUrl, formData, {
         onUploadProgress: (progressEvent) => {
             if (onProgress && progressEvent.total) {
                 const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -83,7 +86,7 @@ export const uploadToS3 = async (
 };
 
 /**
- * Persists upload metadata to the backend after S3 completion
+ * Persists upload metadata to the backend after Cloudinary upload completion
  */
 export interface UploadMetadata {
     fileKey: string;

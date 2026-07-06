@@ -1,30 +1,26 @@
 import fs from 'fs';
 import path from 'path';
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { spawn, execSync } from 'child_process';
-import { Readable } from 'stream';
-import { pipeline } from 'stream/promises';
-import { s3Client } from '../../config/s3';
-import { env } from '../../config/env';
+import { downloadFileFromCloudinary, uploadFileToCloudinary } from '../../config/cloudinary';
 
 interface ExtractAudioInput {
     jobId: string;
     userId: string;
-    inputVideoS3Key: string;
+    inputVideoPublicId: string;
 }
 
 interface ExtractAudioOutput {
-    audioS3Key: string;
+    audioPublicId: string;
 }
 
 /**
- * Extracts audio from a video file and uploads it to S3.
+ * Extracts audio from a video file and uploads it to Cloudinary.
  * Cleans up local temporary files after successful upload.
  */
 export const extractAudio = async ({
     jobId,
     userId,
-    inputVideoS3Key,
+    inputVideoPublicId,
 }: ExtractAudioInput): Promise<ExtractAudioOutput> => {
     const tempDir = path.join(process.cwd(), 'temp');
 
@@ -33,26 +29,16 @@ export const extractAudio = async ({
         fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    const videoExt = path.extname(inputVideoS3Key) || '.mp4';
+    const videoExt = path.extname(inputVideoPublicId) || '.mp4';
     const localVideoPath = path.join(tempDir, `${jobId}.video${videoExt}`);
     const localAudioPath = path.join(tempDir, `${jobId}.wav`);
 
     console.log(`[Worker] Starting audio extraction for Job ${jobId}`);
 
     try {
-        // 1. Download Video from S3
-        console.log(`[Worker] Downloading from S3: ${inputVideoS3Key}`);
-        const getCommand = new GetObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: inputVideoS3Key,
-        });
-
-        const getResponse = await s3Client.send(getCommand);
-        if (!getResponse.Body) throw new Error('S3 response body is empty');
-
-        const writeStream = fs.createWriteStream(localVideoPath);
-        // @ts-ignore
-        await pipeline(getResponse.Body as Readable, writeStream);
+        // 1. Download Video from Cloudinary
+        console.log(`[Worker] Downloading from Cloudinary: ${inputVideoPublicId}`);
+        await downloadFileFromCloudinary(inputVideoPublicId, 'video', localVideoPath);
         console.log(`[Worker] Download complete: ${localVideoPath}`);
 
         // 2. Preflight Probe & Delay
@@ -131,21 +117,13 @@ export const extractAudio = async ({
             });
         });
 
-        // 3. Upload Audio to S3
-        const audioS3Key = `clueso/audio/${userId}/${jobId}.wav`;
-        console.log(`[Worker] Uploading extracted audio to S3: ${audioS3Key}`);
+        // 3. Upload Audio to Cloudinary
+        const audioPublicId = `clueso/audio/${userId}/${jobId}`;
+        console.log(`[Worker] Uploading extracted audio to Cloudinary: ${audioPublicId}`);
 
-        const audioBuffer = fs.readFileSync(localAudioPath);
-        const putCommand = new PutObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: audioS3Key,
-            Body: audioBuffer,
-            ContentType: 'audio/wav',
-        });
+        await uploadFileToCloudinary(localAudioPath, audioPublicId, 'video');
 
-        await s3Client.send(putCommand);
-
-        console.log(`[Worker] Upload complete: ${audioS3Key}`);
+        console.log(`[Worker] Upload complete: ${audioPublicId}`);
 
         // 4. Cleanup Local Files
         console.log(`[Worker] Cleaning up local temporary files...`);
@@ -156,7 +134,7 @@ export const extractAudio = async ({
             }
         });
 
-        return { audioS3Key };
+        return { audioPublicId };
 
     } catch (error) {
         console.error(`[Worker] Audio extraction/upload failed:`, error);

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { JobLifecycleService } from '../services/jobLifecycle.service';
-import { generateVoiceoverFromS3 } from '../workers/voiceover.worker';
+import { generateVoiceoverFromCloudinary } from '../workers/voiceover.worker';
 
 /**
  * Controller to handle voiceover generation requests.
@@ -42,20 +42,20 @@ export const handleVoiceoverGeneration = async (req: Request, res: Response) => 
         console.log(`[VoiceoverController] Starting voiceover generation for Job ${jobId}`);
 
         // 6. Invoke voiceover.worker
-        const { voiceoverPrefixS3Key } = await generateVoiceoverFromS3({
+        const { voiceoverPrefixPublicId } = await generateVoiceoverFromCloudinary({
             jobId,
             userId,
-            improvedScriptS3Key: job.improvedScriptS3Key,
+            improvedScriptPublicId: job.improvedScriptPublicId,
         });
 
         // 7. Call updateJobAfterVoiceover
-        await JobLifecycleService.updateJobAfterVoiceover(jobId, voiceoverPrefixS3Key);
+        await JobLifecycleService.updateJobAfterVoiceover(jobId, voiceoverPrefixPublicId);
 
         // 8. Return JSON response
         return res.status(200).json({
             jobId,
             status: "VOICE_GENERATED",
-            voiceoverPrefixS3Key
+            voiceoverPrefixPublicId
         });
 
     } catch (error) {

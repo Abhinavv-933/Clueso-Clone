@@ -7,16 +7,16 @@ export interface CluesoJob {
 
     // Inputs
     inputUploadId: string; // Reference to the Upload record
-    inputVideoS3Key: string;
+    inputVideoPublicId: string;
 
     status: JobStatus;
 
     // Output Artifacts matching the pipeline steps
-    audioS3Key?: string;
-    transcriptS3Key?: string;
-    improvedScriptS3Key?: string;
-    aiVoiceS3Key?: string;
-    finalVideoS3Key?: string;
+    audioPublicId?: string;
+    transcriptPublicId?: string;
+    improvedScriptPublicId?: string;
+    aiVoicePublicId?: string;
+    finalVideoPublicId?: string;
 
     createdAt: Date;
     updatedAt: Date;

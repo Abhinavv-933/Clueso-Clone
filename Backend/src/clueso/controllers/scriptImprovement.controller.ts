@@ -1,9 +1,7 @@
 import { Request, Response } from 'express';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { s3Client } from '../../config/s3';
-import { env } from '../../config/env';
+import { uploadContentToCloudinary } from '../../config/cloudinary';
 import { JobLifecycleService } from '../services/jobLifecycle.service';
-import { improveScriptFromS3 } from '../workers/improveScript.worker';
+import { improveScriptFromCloudinary } from '../workers/improveScript.worker';
 
 /**
  * Controller to handle script improvement requests.
@@ -45,32 +43,26 @@ export const handleScriptImprovement = async (req: Request, res: Response) => {
         console.log(`[ScriptImprovementController] Starting script improvement for Job ${jobId}`);
 
         // 6. Invoke improveScript.worker
-        const improvedScript = await improveScriptFromS3({
+        const improvedScript = await improveScriptFromCloudinary({
             jobId,
             userId,
-            transcriptS3Key: job.transcriptS3Key,
+            transcriptPublicId: job.transcriptPublicId,
         });
 
-        // 7. Upload improved script JSON to S3
-        const improvedScriptS3Key = `clueso/scripts/${userId}/${jobId}.json`;
-        console.log(`[ScriptImprovementController] Uploading improved script to S3: ${improvedScriptS3Key}`);
+        // 7. Upload improved script JSON to Cloudinary
+        const improvedScriptPublicId = `clueso/scripts/${userId}/${jobId}`;
+        console.log(`[ScriptImprovementController] Uploading improved script to Cloudinary: ${improvedScriptPublicId}`);
 
-        const putCommand = new PutObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: improvedScriptS3Key,
-            Body: JSON.stringify(improvedScript),
-            ContentType: 'application/json',
-        });
-        await s3Client.send(putCommand);
+        await uploadContentToCloudinary(JSON.stringify(improvedScript), improvedScriptPublicId);
 
         // 8. Call updateJobAfterScriptImprovement
-        await JobLifecycleService.updateJobAfterScriptImprovement(jobId, improvedScriptS3Key);
+        await JobLifecycleService.updateJobAfterScriptImprovement(jobId, improvedScriptPublicId);
 
         // 9. Return JSON response
         return res.status(200).json({
             jobId,
             status: "SCRIPT_IMPROVED",
-            improvedScriptS3Key
+            improvedScriptPublicId
         });
 
     } catch (error) {

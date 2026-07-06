@@ -8,8 +8,8 @@ router.get('/health', requireAuth(), (req: Request, res: Response) => {
         status: "ok",
         module: "clueso",
         auth: "clerk",
-        storage: "s3",
-        uploadFlow: "presigned-url",
+        storage: "cloudinary",
+        uploadFlow: "signed-upload",
         timestamp: new Date().toISOString()
     });
 });

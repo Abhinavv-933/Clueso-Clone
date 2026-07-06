@@ -19,7 +19,7 @@ export interface Project {
 interface ProjectContextType {
     projects: Project[];
     addProject: (type: ProjectType) => void;
-    createProject: (title: string, s3Key: string, uploadId: string) => Promise<string>;
+    createProject: (title: string, cloudinaryPublicId: string, uploadId: string) => Promise<string>;
     deleteProject: (projectId: string) => void;
     isLoading: boolean;
     isUploadModalOpen: boolean;
@@ -91,7 +91,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         console.warn("addProject (mock) called. Use createProject for real backend.");
     };
 
-    const createProject = async (title: string, s3Key: string, uploadId: string) => {
+    const createProject = async (title: string, cloudinaryPublicId: string, uploadId: string) => {
         try {
             const token = await getToken();
             console.log(`[ProjectContext] Creating project at: ${API_URL}/projects`);
@@ -102,7 +102,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ title, s3Key, uploadId }),
+                body: JSON.stringify({ title, cloudinaryPublicId, uploadId }),
             });
 
             if (response.ok) {

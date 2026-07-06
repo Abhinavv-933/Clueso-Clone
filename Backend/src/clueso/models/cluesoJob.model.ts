@@ -6,14 +6,14 @@ export interface ICluesoJob extends Document {
     userId: string;
     projectId?: string;
     inputUploadId: string;
-    inputVideoS3Key: string;
+    inputVideoPublicId: string;
     status: JobStatus;
-    audioS3Key?: string;
-    transcriptS3Key?: string;
+    audioPublicId?: string;
+    transcriptPublicId?: string;
     transcriptText?: string;
-    improvedScriptS3Key?: string;
-    aiVoiceS3Key?: string;
-    finalVideoS3Key?: string;
+    improvedScriptPublicId?: string;
+    aiVoicePublicId?: string;
+    finalVideoPublicId?: string;
     errorMessage?: string;
     createdAt: Date;
     updatedAt: Date;
@@ -40,7 +40,7 @@ const cluesoJobSchema = new Schema<ICluesoJob>(
             type: String,
             required: true,
         },
-        inputVideoS3Key: {
+        inputVideoPublicId: {
             type: String,
             required: true,
         },
@@ -59,12 +59,12 @@ const cluesoJobSchema = new Schema<ICluesoJob>(
             ],
             default: 'UPLOADED',
         },
-        audioS3Key: String,
-        transcriptS3Key: String,
+        audioPublicId: String,
+        transcriptPublicId: String,
         transcriptText: String,
-        improvedScriptS3Key: String,
-        aiVoiceS3Key: String,
-        finalVideoS3Key: String,
+        improvedScriptPublicId: String,
+        aiVoicePublicId: String,
+        finalVideoPublicId: String,
         errorMessage: String,
     },
     {

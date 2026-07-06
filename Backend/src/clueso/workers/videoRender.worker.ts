@@ -1,22 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { Readable } from 'stream';
-import { pipeline } from 'stream/promises';
-import { s3Client } from '../../config/s3';
-import { env } from '../../config/env';
+import { downloadFileFromCloudinary, uploadFileToCloudinary } from '../../config/cloudinary';
 import { VideoRenderedAsset } from '../../../shared';
 
 interface VideoRenderWorkerInput {
     jobId: string;
     userId: string;
-    originalVideoS3Key: string;
-    voiceoverS3Key: string;
+    originalVideoPublicId: string;
+    voiceoverPublicId: string;
 }
 
 interface VideoRenderWorkerOutput {
-    renderedVideoS3Key: string;
+    renderedVideoPublicId: string;
     renderedVideoAsset: VideoRenderedAsset;
 }
 
@@ -24,17 +20,17 @@ interface VideoRenderWorkerOutput {
  * Worker to render the final video by merging the original visuals with the AI voiceover.
  * Uses FFmpeg for efficient audio swapping and ffprobe for metadata extraction.
  */
-export const renderFinalVideoFromS3 = async ({
+export const renderFinalVideoFromCloudinary = async ({
     jobId,
     userId,
-    originalVideoS3Key,
-    voiceoverS3Key,
+    originalVideoPublicId,
+    voiceoverPublicId,
 }: VideoRenderWorkerInput): Promise<VideoRenderWorkerOutput> => {
     console.log(`[VideoRenderWorker] Starting final render for Job ${jobId}`);
 
     const tempDir = path.join(process.cwd(), 'temp', 'renders', jobId);
     const localVideoInput = path.join(tempDir, 'input_video.mp4');
-    const audioExtension = path.extname(voiceoverS3Key) || '.mp3';
+    const audioExtension = path.extname(voiceoverPublicId) || '.mp3';
     const localAudioInput = path.join(tempDir, `voiceover${audioExtension}`);
     const localVideoOutput = path.join(tempDir, 'final.mp4');
 
@@ -44,18 +40,11 @@ export const renderFinalVideoFromS3 = async ({
             fs.mkdirSync(tempDir, { recursive: true });
         }
 
-        // 2. Download inputs from S3
+        // 2. Download inputs from Cloudinary
         console.log(`[VideoRenderWorker] Downloading original video and voiceover...`);
-        const downloadFile = async (key: string, localPath: string) => {
-            const command = new GetObjectCommand({ Bucket: env.AWS_S3_BUCKET_NAME, Key: key });
-            const response = await s3Client.send(command);
-            if (!response.Body) throw new Error(`Empty body for ${key}`);
-            await pipeline(response.Body as Readable, fs.createWriteStream(localPath));
-        };
-
         await Promise.all([
-            downloadFile(originalVideoS3Key, localVideoInput),
-            downloadFile(voiceoverS3Key, localAudioInput)
+            downloadFileFromCloudinary(originalVideoPublicId, 'video', localVideoInput),
+            downloadFileFromCloudinary(voiceoverPublicId, 'video', localAudioInput)
         ]);
 
         // 3. Execute FFmpeg to merge
@@ -131,19 +120,11 @@ export const renderFinalVideoFromS3 = async ({
             });
         });
 
-        // 5. Upload to S3
-        const renderedVideoS3Key = `clueso/rendered-videos/${userId}/${jobId}/final.mp4`;
-        console.log(`[VideoRenderWorker] Uploading rendered video to S3: ${renderedVideoS3Key}`);
+        // 5. Upload to Cloudinary
+        const renderedVideoPublicId = `clueso/rendered-videos/${userId}/${jobId}/final`;
+        console.log(`[VideoRenderWorker] Uploading rendered video to Cloudinary: ${renderedVideoPublicId}`);
 
-        const uploadStream = fs.createReadStream(localVideoOutput);
-        const putCommand = new PutObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: renderedVideoS3Key,
-            Body: uploadStream,
-            ContentType: 'video/mp4',
-        });
-
-        await s3Client.send(putCommand);
+        await uploadFileToCloudinary(localVideoOutput, renderedVideoPublicId, 'video');
 
         // 6. Build Rendered Asset object
         const renderedVideoAsset: VideoRenderedAsset = {
@@ -151,11 +132,11 @@ export const renderFinalVideoFromS3 = async ({
             projectId: 'pending', // Usually passed in or extracted from job, placeholder for pure worker logic
             jobId: jobId,
             input: {
-                originalVideoS3Key,
-                voiceoverS3Key,
+                originalVideoPublicId,
+                voiceoverPublicId,
             },
             output: {
-                renderedVideoS3Key,
+                renderedVideoPublicId,
                 format: 'mp4',
             },
             metadata: {
@@ -167,7 +148,7 @@ export const renderFinalVideoFromS3 = async ({
         };
 
         return {
-            renderedVideoS3Key,
+            renderedVideoPublicId,
             renderedVideoAsset,
         };
 

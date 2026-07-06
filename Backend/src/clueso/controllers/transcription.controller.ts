@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { JobLifecycleService } from '../services/jobLifecycle.service';
-import { transcribeAudioFromS3 } from '../workers/transcribeAudio.worker';
+import { transcribeAudioFromCloudinary } from '../workers/transcribeAudio.worker';
 
 /**
  * Controller to handle audio transcription requests.
@@ -44,20 +44,20 @@ export const handleTranscription = async (req: Request, res: Response) => {
         console.log(`[TranscriptionController] Starting transcription for Job ${jobId}`);
 
         // 6. Invoke transcribeAudio.worker
-        const { transcriptS3Key } = await transcribeAudioFromS3({
+        const { transcriptPublicId } = await transcribeAudioFromCloudinary({
             jobId,
             userId,
-            audioS3Key: job.audioS3Key,
+            audioPublicId: job.audioPublicId,
         });
 
         // 7. Call updateJobAfterTranscription
-        await JobLifecycleService.updateJobAfterTranscription(jobId, transcriptS3Key);
+        await JobLifecycleService.updateJobAfterTranscription(jobId, transcriptPublicId);
 
         // 8. Return JSON response
         return res.status(200).json({
             jobId,
             status: "TRANSCRIBED",
-            transcriptS3Key
+            transcriptPublicId
         });
 
     } catch (error) {

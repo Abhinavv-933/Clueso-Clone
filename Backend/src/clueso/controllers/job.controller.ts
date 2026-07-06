@@ -57,7 +57,7 @@ export const createJob = async (
                 return res.status(200).json({
                     jobId: existingJob.jobId,
                     uploadId: existingJob.inputUploadId,
-                    inputVideoS3Key: existingJob.inputVideoS3Key,
+                    inputVideoPublicId: existingJob.inputVideoPublicId,
                     status: existingJob.status,
                     isReused: true
                 });
@@ -72,7 +72,7 @@ export const createJob = async (
             userId,
             projectId,
             inputUploadId: uploadId,
-            inputVideoS3Key: upload.fileKey,
+            inputVideoPublicId: upload.fileKey,
             status: 'UPLOADED',
         });
 
@@ -85,7 +85,7 @@ export const createJob = async (
         return res.status(201).json({
             jobId,
             uploadId,
-            inputVideoS3Key: job.inputVideoS3Key,
+            inputVideoPublicId: job.inputVideoPublicId,
             status: job.status,
         });
 

@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { s3Client } from '../../config/s3';
+import { downloadTextFromCloudinary } from '../../config/cloudinary';
 import { CluesoJobModel } from '../models/cluesoJob.model';
 import { ProjectModel } from '../../models/project.model';
 
@@ -56,9 +55,9 @@ export const getTranscript = async (req: Request, res: Response) => {
             });
         }
 
-        // Check if transcript key exists
-        if (!job.transcriptS3Key) {
-            console.log(`[GetTranscript] 202: Job ${job.jobId} is ${job.status} but transcriptS3Key is missing`);
+        // Check if transcript public_id exists
+        if (!job.transcriptPublicId) {
+            console.log(`[GetTranscript] 202: Job ${job.jobId} is ${job.status} but transcriptPublicId is missing`);
             return res.status(202).json({
                 success: true,
                 status: 'PROCESSING',
@@ -66,27 +65,20 @@ export const getTranscript = async (req: Request, res: Response) => {
             });
         }
 
-        // Fetch from S3
+        // Fetch from Cloudinary
         let transcriptText = "";
         try {
-            const command = new GetObjectCommand({
-                Bucket: process.env.AWS_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME,
-                Key: job.transcriptS3Key,
-            });
-            const response = await s3Client.send(command);
-            if (response.Body) {
-                transcriptText = await response.Body.transformToString("utf-8");
-            }
-        } catch (s3Error: any) {
-            if (s3Error.name === 'NoSuchKey' || s3Error.Code === 'NoSuchKey') {
-                console.log(`[GetTranscript] 202: S3 file not found for key ${job.transcriptS3Key}`);
+            transcriptText = await downloadTextFromCloudinary(job.transcriptPublicId, 'raw');
+        } catch (cloudinaryError: any) {
+            if (cloudinaryError.status === 404) {
+                console.log(`[GetTranscript] 202: Cloudinary asset not found for public_id ${job.transcriptPublicId}`);
                 return res.status(202).json({
                     success: true,
                     status: 'PROCESSING',
                     message: 'Transcript is still being generated'
                 });
             }
-            console.error(`[GetTranscript] S3 error:`, s3Error);
+            console.error(`[GetTranscript] Cloudinary error:`, cloudinaryError);
             return res.status(500).json({
                 success: false,
                 message: 'Failed to retrieve transcript from storage'
@@ -94,7 +86,7 @@ export const getTranscript = async (req: Request, res: Response) => {
         }
 
         if (!transcriptText || transcriptText.trim().length === 0) {
-            console.log(`[GetTranscript] 202: S3 file is empty for key ${job.transcriptS3Key}`);
+            console.log(`[GetTranscript] 202: Cloudinary asset is empty for public_id ${job.transcriptPublicId}`);
             return res.status(202).json({
                 success: true,
                 status: 'PROCESSING',

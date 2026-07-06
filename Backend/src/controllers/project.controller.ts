@@ -1,9 +1,6 @@
 import { Request, Response } from 'express';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { z } from 'zod';
-import { s3Client } from '../config/s3';
-import { env } from '../config/env';
+import { getSignedDeliveryUrl } from '../config/cloudinary';
 import { ProjectModel } from '../models/project.model';
 import { ProjectSchema } from '../../shared/project.schema';
 import { UploadModel } from '../models/upload.model';
@@ -11,11 +8,11 @@ import { CluesoJobModel } from '../clueso/models/cluesoJob.model';
 
 const CreateProjectSchema = ProjectSchema.pick({
     title: true,
-    s3Key: true,
+    cloudinaryPublicId: true,
     uploadId: true,
 }).required({
     title: true,
-    s3Key: true,
+    cloudinaryPublicId: true,
     uploadId: true,
 });
 
@@ -90,7 +87,7 @@ export const createProject = async (req: Request, res: Response) => {
     const project = await ProjectModel.create({
         userId,
         title: parsed.title,
-        s3Key: parsed.s3Key,
+        cloudinaryPublicId: parsed.cloudinaryPublicId,
         uploadId: parsed.uploadId,
         status: 'UPLOADED',
     });
@@ -149,21 +146,14 @@ export const getProject = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'Project not found' });
         }
 
-        // Generate Presigned GET URL
-        const command = new GetObjectCommand({
-            Bucket: env.AWS_S3_BUCKET_NAME,
-            Key: project.s3Key,
-        });
-
-        const signedUrl = await getSignedUrl(s3Client, command, {
-            expiresIn: 900, // 15 minutes
-        });
+        // Generate signed delivery URL (project media is always the uploaded video)
+        const signedUrl = getSignedDeliveryUrl(project.cloudinaryPublicId, 'video', 900); // 15 minutes
 
         // Lookup Upload and Job to facilitate frontend flows
-        // If project has uploadId saved, use it. Otherwise try to find it by s3Key (legacy fallback)
+        // If project has uploadId saved, use it. Otherwise try to find it by cloudinaryPublicId (legacy fallback)
         let uploadId = project.uploadId;
         if (!uploadId) {
-            const upload = await UploadModel.findOne({ fileKey: project.s3Key });
+            const upload = await UploadModel.findOne({ fileKey: project.cloudinaryPublicId });
             if (upload) uploadId = upload._id.toString();
         }
 
@@ -175,7 +165,7 @@ export const getProject = async (req: Request, res: Response) => {
             userId: project.userId,
             title: project.title,
             status: project.status,
-            s3Key: project.s3Key,
+            cloudinaryPublicId: project.cloudinaryPublicId,
             fileUrl: signedUrl,
             uploadId: uploadId,
             jobId: job?.jobId,

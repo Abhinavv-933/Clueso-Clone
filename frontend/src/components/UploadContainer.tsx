@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import FileUpload from "./FileUpload";
-import { getPresignedUrl, uploadToS3, saveUploadMetadata } from "@/services/uploadService";
+import { getSignedUploadParams, uploadToCloudinary, saveUploadMetadata } from "@/services/uploadService";
 import { logger, validateEnv } from "@/config/env";
 
 // Run validation once on module load (client-side)
@@ -13,11 +13,11 @@ if (typeof window !== "undefined") {
 
 /**
  * UploadContainer Component
- * 
- * Orchestrates the full S3 upload flow:
+ *
+ * Orchestrates the full Cloudinary upload flow:
  * 1. File selection & local validation (via FileUpload)
- * 2. Authenticated request for a backend Presigned URL
- * 3. Direct PUT upload to S3 with real-time progress tracking
+ * 2. Authenticated request for signed Cloudinary upload params
+ * 3. Direct POST upload to Cloudinary with real-time progress tracking
  * 4. Error recovery via Retry mechanism
  */
 export default function UploadContainer({ onUploadSuccess }: { onUploadSuccess?: () => void }) {
@@ -58,10 +58,10 @@ export default function UploadContainer({ onUploadSuccess }: { onUploadSuccess?:
             const token = await getToken();
             if (!token) throw new Error("Authentication failed. Please sign in again.");
 
-            // Step 2: Request a temporary S3 write permission (Presigned URL)
-            let presignedData;
+            // Step 2: Request signed Cloudinary upload params
+            let signedParams;
             try {
-                presignedData = await getPresignedUrl(
+                signedParams = await getSignedUploadParams(
                     file.name,
                     file.type,
                     file.size,
@@ -71,15 +71,15 @@ export default function UploadContainer({ onUploadSuccess }: { onUploadSuccess?:
                 throw new Error(`Server error: ${err.message || "Could not prepare upload. Please try again later."}`);
             }
 
-            const { uploadUrl, fileKey } = presignedData;
+            const fileKey = signedParams.publicId;
 
-            // Step 3: Stream file bytes directly to S3 via PUT request
+            // Step 3: Stream file bytes directly to Cloudinary
             try {
-                await uploadToS3(uploadUrl, file, (p) => {
+                await uploadToCloudinary(signedParams, file, (p) => {
                     setProgress(p); // Update UI progress state
                 });
             } catch (err: any) {
-                throw new Error(`Upload failed: ${err.response?.status === 403 ? "Access denied" : "Network error or S3 interruption"}. Please check your connection and retry.`);
+                throw new Error(`Upload failed: ${err.response?.status === 403 ? "Access denied" : "Network error or upload interruption"}. Please check your connection and retry.`);
             }
 
             // Step 4: Finalize by saving metadata to backend

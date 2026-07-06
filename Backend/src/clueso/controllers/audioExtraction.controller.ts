@@ -38,20 +38,20 @@ export const triggerAudioExtraction = async (
         console.log(`[AudioExtractionController] Triggering extraction for Job ${jobId}`);
 
         // 2. Invoke worker (AWAITED for this specific endpoint behavior)
-        const { audioS3Key } = await extractAudio({
+        const { audioPublicId } = await extractAudio({
             jobId: job.jobId,
             userId: job.userId,
-            inputVideoS3Key: job.inputVideoS3Key,
+            inputVideoPublicId: job.inputVideoPublicId,
         });
 
         // 3. Update status using lifecycle service
-        await JobLifecycleService.updateJobAfterAudioExtraction(jobId, audioS3Key);
+        await JobLifecycleService.updateJobAfterAudioExtraction(jobId, audioPublicId);
 
         // 4. Return response
         return res.status(200).json({
             jobId,
             status: "AUDIO_EXTRACTED",
-            audioS3Key
+            audioPublicId
         });
 
     } catch (error) {
