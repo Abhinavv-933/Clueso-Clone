@@ -7,7 +7,7 @@ import { renderFinalVideoFromCloudinary } from '../workers/videoRender.worker';
  * Merges the original video with the generated AI voiceover.
  */
 export const handleVideoRendering = async (req: Request, res: Response) => {
-    const userId = req.auth?.userId;
+    const userId = req.auth().userId;
     const { jobId } = req.body;
 
     // 1. Require Clerk authentication

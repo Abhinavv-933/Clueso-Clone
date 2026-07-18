@@ -21,7 +21,7 @@ const UpdateProjectSchema = z.object({
 });
 
 export const updateProject = async (req: Request, res: Response) => {
-    const userId = req.auth?.userId;
+    const userId = req.auth().userId;
     const { id } = req.params;
 
     console.log('[UpdateProject] Received update request:', { id, userId, body: req.body });
@@ -68,7 +68,7 @@ export const updateProject = async (req: Request, res: Response) => {
 };
 
 export const createProject = async (req: Request, res: Response) => {
-    const userId = req.auth?.userId;
+    const userId = req.auth().userId;
 
     if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
@@ -103,7 +103,7 @@ export const createProject = async (req: Request, res: Response) => {
 };
 
 export const getProjects = async (req: Request, res: Response) => {
-    const userId = req.auth?.userId;
+    const userId = req.auth().userId;
 
     if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
@@ -115,7 +115,7 @@ export const getProjects = async (req: Request, res: Response) => {
 };
 
 export const deleteProject = async (req: Request, res: Response) => {
-    const userId = req.auth?.userId;
+    const userId = req.auth().userId;
     const { id } = req.params;
 
     if (!userId) {
@@ -132,7 +132,7 @@ export const deleteProject = async (req: Request, res: Response) => {
 };
 
 export const getProject = async (req: Request, res: Response) => {
-    const userId = req.auth?.userId;
+    const userId = req.auth().userId;
     const { id } = req.params;
 
     if (!userId) {
@@ -147,7 +147,7 @@ export const getProject = async (req: Request, res: Response) => {
         }
 
         // Generate signed delivery URL (project media is always the uploaded video)
-        const signedUrl = getSignedDeliveryUrl(project.cloudinaryPublicId, 'video', 900); // 15 minutes
+        const signedUrl = getSignedDeliveryUrl(project.cloudinaryPublicId, 'video');
 
         // Lookup Upload and Job to facilitate frontend flows
         // If project has uploadId saved, use it. Otherwise try to find it by cloudinaryPublicId (legacy fallback)

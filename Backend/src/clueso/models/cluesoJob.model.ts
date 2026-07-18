@@ -11,8 +11,10 @@ export interface ICluesoJob extends Document {
     audioPublicId?: string;
     transcriptPublicId?: string;
     transcriptText?: string;
+    segments?: unknown[];
     improvedScriptPublicId?: string;
     aiVoicePublicId?: string;
+    voiceoverStubbed?: boolean;
     finalVideoPublicId?: string;
     errorMessage?: string;
     createdAt: Date;
@@ -62,8 +64,10 @@ const cluesoJobSchema = new Schema<ICluesoJob>(
         audioPublicId: String,
         transcriptPublicId: String,
         transcriptText: String,
+        segments: { type: [Schema.Types.Mixed], default: undefined },
         improvedScriptPublicId: String,
         aiVoicePublicId: String,
+        voiceoverStubbed: Boolean,
         finalVideoPublicId: String,
         errorMessage: String,
     },

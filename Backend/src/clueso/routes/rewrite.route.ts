@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuthMiddleware } from '../../middleware/auth';
 import { handleRewrite } from '../controllers/rewrite.controller';
 
 const router = Router();
@@ -9,6 +9,6 @@ const router = Router();
  * @desc Rewrite the transcript into a professional script
  * @access Private
  */
-router.post('/rewrite', requireAuth(), handleRewrite);
+router.post('/rewrite', requireAuthMiddleware, handleRewrite);
 
 export default router;

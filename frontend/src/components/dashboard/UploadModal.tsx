@@ -47,14 +47,14 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
             const apiUrl = API_URL;
 
             // 1. Get signed Cloudinary upload params
-            console.log(`[UploadModal] Getting signed upload params from: ${apiUrl}/uploads/presigned-url`);
+            console.log(`[UploadModal] Getting signed upload params from: ${apiUrl}/uploads/signed-upload`);
             console.log(`[UploadModal] Request body:`, {
                 filename: file.name,
                 contentType: file.type,
                 fileSize: file.size,
             });
 
-            const presignRes = await fetch(`${apiUrl}/uploads/presigned-url`, {
+            const signedUploadRes = await fetch(`${apiUrl}/uploads/signed-upload`, {
                 method: "POST",
                 credentials: "include",
                 headers: {
@@ -68,12 +68,12 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
                 }),
             });
 
-            console.log(`[UploadModal] Signed upload params response status:`, presignRes.status);
+            console.log(`[UploadModal] Signed upload params response status:`, signedUploadRes.status);
 
-            if (!presignRes.ok) {
+            if (!signedUploadRes.ok) {
                 // Log the actual error response
-                const errorText = await presignRes.text();
-                console.error(`[UploadModal] Failed to get upload params. Status: ${presignRes.status}`);
+                const errorText = await signedUploadRes.text();
+                console.error(`[UploadModal] Failed to get upload params. Status: ${signedUploadRes.status}`);
                 console.error(`[UploadModal] Error response:`, errorText);
 
                 let errorMessage = "Failed to get upload params";
@@ -85,10 +85,10 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
                     errorMessage = errorText || errorMessage;
                 }
 
-                throw new Error(`${errorMessage} (Status: ${presignRes.status})`);
+                throw new Error(`${errorMessage} (Status: ${signedUploadRes.status})`);
             }
 
-            const { uploadUrl, publicId, timestamp, signature, apiKey } = await presignRes.json();
+            const { uploadUrl, publicId, timestamp, signature, apiKey } = await signedUploadRes.json();
             console.log(`[UploadModal] Got signed upload params successfully. Public ID:`, publicId);
 
             // 2. Upload to Cloudinary

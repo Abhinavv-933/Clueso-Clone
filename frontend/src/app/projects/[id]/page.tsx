@@ -60,6 +60,8 @@ export default function ProjectDetailPage() {
     const activeJobIdRef = useRef<string | null>(null);
     // Ref to store the timeout ID for cleanup
     const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // Ref to synchronously prevent a double-invocation of create-job (e.g. rapid double-click)
+    const isCreatingJobRef = useRef(false);
 
     // Derived state for current project - Strictly follow precedence:
     // 1. Local state (transcriptByProject)
@@ -347,12 +349,21 @@ export default function ProjectDetailPage() {
     const handleGenerateTranscript = async () => {
         if (!project) return;
 
-        // Prevent multiple simultaneous transcription requests for the same job
-        if (transcriptionStatus === "processing") {
+        // Prevent multiple simultaneous transcription requests for the same job.
+        // Checked via a ref (not just React state) because state updates aren't
+        // synchronous, so a rapid double-click can slip both calls past a state check.
+        if (isCreatingJobRef.current || transcriptionStatus === "processing") {
             console.log('[Transcription] Already processing. Skipping...');
             return;
         }
 
+        // Don't fire the request before Clerk has a session to attach to it.
+        if (!isLoaded || !isSignedIn) {
+            console.log('[Transcription] Auth not ready yet. Skipping...');
+            return;
+        }
+
+        isCreatingJobRef.current = true;
         setTranscriptionError(null);
         setTranscriptionStatus("processing");
         console.log('[Transcription] Starting workflow...');
@@ -379,8 +390,8 @@ export default function ProjectDetailPage() {
             });
 
             if (!createRes.ok) {
-                const errorData = await createRes.json();
-                throw new Error(errorData.message || `Failed to initiate transcription (Status: ${createRes.status})`);
+                const errorData = await createRes.json().catch(() => null);
+                throw new Error(errorData?.message || `Failed to initiate transcription (Status: ${createRes.status})`);
             }
 
             const jobData = await createRes.json();
@@ -407,6 +418,8 @@ export default function ProjectDetailPage() {
             setTranscriptionError(err instanceof Error ? err.message : 'Unknown error starting transcription');
             setTranscriptionStatus("error");
             activeJobIdRef.current = null;
+        } finally {
+            isCreatingJobRef.current = false;
         }
 
     };

@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuthMiddleware } from '../../middleware/auth';
 import { createJob, getJobStatus } from '../controllers/job.controller';
 
 const router = Router();
 
-router.post('/create-job', requireAuth(), createJob);
-router.get('/:jobId', requireAuth(), getJobStatus);
+router.post('/create-job', requireAuthMiddleware, createJob);
+router.get('/:jobId', requireAuthMiddleware, getJobStatus);
 
 export default router;

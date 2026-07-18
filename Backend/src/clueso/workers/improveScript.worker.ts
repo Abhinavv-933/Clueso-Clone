@@ -1,5 +1,5 @@
 import { downloadTextFromCloudinary } from '../../config/cloudinary';
-import { OllamaService } from '../services/ollama.service';
+import { GroqService } from '../services/groq.service';
 import { TranscriptSegment, ImprovedScript, ImprovedScriptSegment } from '../../../shared';
 
 interface ImproveScriptInput {
@@ -9,7 +9,7 @@ interface ImproveScriptInput {
 }
 
 /**
- * Downloads a transcript from Cloudinary, improves segments in batches using Ollama,
+ * Downloads a transcript from Cloudinary, improves segments in batches using Groq,
  * and assembles the final ImprovedScript object.
  */
 export const improveScriptFromCloudinary = async ({
@@ -62,7 +62,7 @@ export const improveScriptFromCloudinary = async ({
             console.log(`[ImproveScriptWorker] Processing batch ${Math.floor(i / CHUNK_SIZE) + 1}...`);
 
             try {
-                const improvements = await OllamaService.improveTranscriptChunk(chunk);
+                const improvements = await GroqService.improveTranscriptChunk(chunk);
 
                 // Assemble improved segments
                 chunk.forEach((seg, index) => {

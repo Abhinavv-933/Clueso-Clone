@@ -5,10 +5,10 @@ import { improveScriptFromCloudinary } from '../workers/improveScript.worker';
 
 /**
  * Controller to handle script improvement requests.
- * Uses LLM (Ollama) to clean up raw transcripts into polished scripts.
+ * Uses Groq's LLM API to clean up raw transcripts into polished scripts.
  */
 export const handleScriptImprovement = async (req: Request, res: Response) => {
-    const userId = req.auth?.userId;
+    const userId = req.auth().userId;
     const { jobId } = req.body;
 
     // 1. Authenticated

@@ -35,7 +35,7 @@ export const getSignedUploadParams = async (
     fileSize: number,
     token?: string
 ): Promise<SignedUploadParams> => {
-    const response = await fetch("/api/uploads/presigned-url", {
+    const response = await fetch("/api/uploads/signed-upload", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

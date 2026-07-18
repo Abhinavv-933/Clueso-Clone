@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuthMiddleware } from '../../middleware/auth';
 import { handleVideoRendering } from '../controllers/videoRender.controller';
 
 const router = Router();
@@ -9,6 +9,6 @@ const router = Router();
  * @desc Triggers the final video rendering process (merging video + voiceover)
  * @access Private (Clerk Auth)
  */
-router.post('/render-video', requireAuth(), handleVideoRendering);
+router.post('/render-video', requireAuthMiddleware, handleVideoRendering);
 
 export default router;

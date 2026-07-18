@@ -30,26 +30,26 @@ const allowedMimeTypes = [
 /**
  * Request body validation
  */
-const presignedUrlSchema = z.object({
+const signedUploadRequestSchema = z.object({
     filename: z.string().min(1),
     contentType: z.string().min(1),
     fileSize: z.number().positive(),
 });
 
-export const getPresignedUploadUrl = async (
+export const getUploadSignature = async (
     req: Request,
     res: Response,
     next: NextFunction
 ) => {
     try {
         // Clerk injects auth here
-        const userId = req.auth?.userId;
+        const userId = req.auth().userId;
 
         if (!userId) {
             return res.status(401).json({ message: 'Unauthorized' });
         }
 
-        const parsed = presignedUrlSchema.safeParse(req.body);
+        const parsed = signedUploadRequestSchema.safeParse(req.body);
 
         if (!parsed.success) {
             console.error('[Upload] Invalid request body:', parsed.error);
@@ -101,7 +101,7 @@ export const saveUploadMetadata = async (
     next: NextFunction
 ) => {
     try {
-        const userId = req.auth?.userId;
+        const userId = req.auth().userId;
         if (!userId) {
             return res.status(401).json({ message: 'Unauthorized' });
         }
@@ -140,7 +140,7 @@ export const listUploads = async (
     next: NextFunction
 ) => {
     try {
-        const userId = req.auth?.userId;
+        const userId = req.auth().userId;
 
         if (!userId) {
             return res.status(401).json({ message: 'Unauthorized' });
@@ -162,7 +162,7 @@ export const getDownloadUrl = async (
     next: NextFunction
 ) => {
     try {
-        const userId = req.auth?.userId;
+        const userId = req.auth().userId;
         if (!userId) {
             return res.status(401).json({ message: 'Unauthorized' });
         }
@@ -180,8 +180,7 @@ export const getDownloadUrl = async (
 
         const downloadUrl = getSignedDeliveryUrl(
             upload.fileKey,
-            getResourceTypeForMime(upload.fileType),
-            60 * 60 // 1 hour
+            getResourceTypeForMime(upload.fileType)
         );
 
         return res.status(200).json({ downloadUrl });
@@ -198,7 +197,7 @@ export const createShareLink = async (
     next: NextFunction
 ) => {
     try {
-        const userId = req.auth?.userId;
+        const userId = req.auth().userId;
         if (!userId) {
             return res.status(401).json({ message: 'Unauthorized' });
         }
@@ -282,8 +281,7 @@ export const resolveShareToken = async (
         // Generate signed delivery URL via Cloudinary
         const mediaUrl = getSignedDeliveryUrl(
             upload.fileKey,
-            getResourceTypeForMime(upload.fileType),
-            60 * 60 // 1 hour
+            getResourceTypeForMime(upload.fileType)
         );
 
         return res.status(200).json({

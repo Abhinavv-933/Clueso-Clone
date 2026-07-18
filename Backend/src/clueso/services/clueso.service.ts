@@ -1,16 +1,16 @@
 import fs from 'fs';
-import { uploadFileToCloudinary, uploadContentToCloudinary } from '../../config/cloudinary';
+import path from 'path';
+import { uploadFileToCloudinary, uploadContentToCloudinary, getResourceTypeForMime } from '../../config/cloudinary';
 import { env } from '../../config/env';
 import { CluesoJobModel } from '../models/cluesoJob.model';
+import { UploadModel } from '../../models/upload.model';
 import { JobStatus } from '../types/jobStatus';
 
 // Import workers
-import { extractAudio } from '../workers/extractAudio.worker';
-import { transcribeAudioFromCloudinary } from '../workers/transcribeAudio.worker';
+import { transcribeVideo } from '../workers/transcribeVideo.worker';
 import { improveScriptFromCloudinary } from '../workers/improveScript.worker';
 import { generateVoice } from '../workers/generateVoice.worker';
 import { renderFinalVideoFromCloudinary } from '../workers/videoRender.worker';
-import { JobLifecycleService } from './jobLifecycle.service';
 
 export class CluesoService {
     /**
@@ -26,41 +26,29 @@ export class CluesoService {
                 return;
             }
 
-            // 1. Extract Audio
-            console.log(`[CluesoService] [Step 1/4] Initiating audio extraction for Job ${jobId}...`);
-            const { audioPublicId } = await extractAudio({
-                jobId: job.jobId,
-                userId: job.userId,
-                inputVideoPublicId: job.inputVideoPublicId,
-            });
+            // 1. Transcription (download from Cloudinary -> maybe FFmpeg -> Groq Whisper, merged worker)
+            const upload = await UploadModel.findOne({ _id: job.inputUploadId });
+            if (!upload) {
+                throw new Error(`Upload ${job.inputUploadId} not found for Job ${jobId}`);
+            }
+            const resourceType = getResourceTypeForMime(upload.fileType);
+            const originalExtension = path.extname(upload.fileName) || '.mp4';
 
-            console.log(`[CluesoService] [Step 1/4] Audio extraction successful for Job ${jobId}. Key: ${audioPublicId}`);
-
-            // Explicitly persist Audio public_id and New Status
-            await CluesoJobModel.updateOne(
-                { jobId },
-                {
-                    status: 'AUDIO_EXTRACTED',
-                    audioPublicId,
-                    updatedAt: new Date()
-                }
-            );
-            await JobLifecycleService.updateJobAfterAudioExtraction(jobId, audioPublicId);
-
-            // 2. Transcription (Detached workflow starts here)
-            // We move all subsequent steps into a try/catch block to ensure status handles failures
-            console.log(`[CluesoService] [Step 2/4] Moving to TRANSCRIBING for Job ${jobId}...`);
+            console.log(`[CluesoService] [Step 1/3] Starting transcription for Job ${jobId}...`);
             await CluesoJobModel.updateOne({ jobId }, { status: 'TRANSCRIBING', updatedAt: new Date() });
 
-            // Proceed with transcription
-            console.log(`[CluesoService] [Step 2/4] Invoking transcription provider for Job ${jobId}...`);
-            const { transcriptPublicId, transcript } = await transcribeAudioFromCloudinary({
-                jobId: job.jobId,
-                userId: job.userId,
-                audioPublicId: audioPublicId,
-            });
+            const { text: transcript, segments, usedFfmpeg } = await transcribeVideo(
+                job.inputVideoPublicId,
+                resourceType,
+                originalExtension
+            );
 
-            console.log(`[CluesoService] [Step 2/4] Provider response received for Job ${jobId}. Length: ${transcript.length}`);
+            console.log(`[CluesoService] [Step 1/3] Transcription complete for Job ${jobId} (ffmpeg used: ${usedFfmpeg}). Length: ${transcript.length}`);
+
+            // Bonus steps (script improvement) still read the transcript back from
+            // Cloudinary by public_id, so keep publishing it there for compatibility.
+            const transcriptPublicId = `clueso/transcripts/${job.userId}/${jobId}`;
+            await uploadContentToCloudinary(transcript, transcriptPublicId);
 
             // Persist results explicitly before updating status
             await CluesoJobModel.updateOne(
@@ -68,20 +56,20 @@ export class CluesoService {
                 {
                     transcriptPublicId,
                     transcriptText: transcript,
+                    segments: segments ?? [],
                     updatedAt: new Date()
                 }
             );
 
             // Finalize transcription status
             await CluesoJobModel.updateOne({ jobId }, { status: 'TRANSCRIBED', updatedAt: new Date() });
-            await JobLifecycleService.updateJobAfterTranscription(jobId, transcriptPublicId);
-            console.log(`[CluesoService] [Step 3/4] Job marked as TRANSCRIBED: ${jobId}`);
+            console.log(`[CluesoService] [Step 2/3] Job marked as TRANSCRIBED: ${jobId}`);
 
-            // 3. Mark as COMPLETED
+            // 2. Mark as COMPLETED
             await CluesoJobModel.updateOne({ jobId }, { status: 'COMPLETED', updatedAt: new Date() });
-            console.log(`[CluesoService] [Step 4/4] Job ${jobId} reached terminal success state: COMPLETED.`);
+            console.log(`[CluesoService] [Step 3/3] Job ${jobId} reached terminal success state: COMPLETED.`);
 
-            // 4. Bonus Steps (Non-blocking)
+            // 3. Bonus Steps (Non-blocking)
             this.runBonusSteps(jobId, job.userId, job.inputVideoPublicId, transcript, transcriptPublicId).catch(err => {
                 console.error(`[CluesoService] Bonus steps failed (non-fatal) for Job ${jobId}:`, err);
             });
@@ -137,25 +125,35 @@ export class CluesoService {
             await this.updateStatus(jobId, 'VOICE_GENERATED');
             const localVoicePath = await generateVoice({ jobId, text: improvedScriptContent });
 
-            const aiVoicePublicId = `clueso/voice/${userId}/${jobId}`;
-            await uploadFileToCloudinary(localVoicePath, aiVoicePublicId, 'video');
-            await CluesoJobModel.updateOne({ jobId }, { aiVoicePublicId });
+            let aiVoicePublicId: string | undefined;
+            if (localVoicePath) {
+                aiVoicePublicId = `clueso/voice/${userId}/${jobId}`;
+                await uploadFileToCloudinary(localVoicePath, aiVoicePublicId, 'video');
+                await CluesoJobModel.updateOne({ jobId }, { aiVoicePublicId });
+            } else {
+                console.log(`[CluesoService] [Bonus] Voiceover is stubbed for Job ${jobId}; skipping Cloudinary upload.`);
+                await CluesoJobModel.updateOne({ jobId }, { voiceoverStubbed: true });
+            }
 
-            // Final Video Render
-            console.log(`[CluesoService] [Bonus] Rendering final video for Job ${jobId}...`);
-            await this.updateStatus(jobId, 'VIDEO_MERGED');
-            const { renderedVideoPublicId } = await renderFinalVideoFromCloudinary({
-                jobId,
-                userId,
-                originalVideoPublicId: inputVideoPublicId,
-                voiceoverPublicId: aiVoicePublicId
-            });
+            // Final Video Render (requires a real voiceover to merge in)
+            if (aiVoicePublicId) {
+                console.log(`[CluesoService] [Bonus] Rendering final video for Job ${jobId}...`);
+                await this.updateStatus(jobId, 'VIDEO_MERGED');
+                const { renderedVideoPublicId } = await renderFinalVideoFromCloudinary({
+                    jobId,
+                    userId,
+                    originalVideoPublicId: inputVideoPublicId,
+                    voiceoverPublicId: aiVoicePublicId
+                });
 
-            await CluesoJobModel.updateOne({ jobId }, { finalVideoPublicId: renderedVideoPublicId });
+                await CluesoJobModel.updateOne({ jobId }, { finalVideoPublicId: renderedVideoPublicId });
+                if (localVoicePath) this.cleanup(localVoicePath);
+            } else {
+                console.log(`[CluesoService] [Bonus] Skipping final video render for Job ${jobId} (voiceover stubbed).`);
+            }
+
             await this.updateStatus(jobId, 'COMPLETED');
-
             console.log(`[CluesoService] [Bonus] All extra steps finalized for Job ${jobId}`);
-            this.cleanup(localVoicePath);
 
         } catch (error) {
             console.error(`[CluesoService] [Bonus] Partial failure for Job ${jobId}:`, error);

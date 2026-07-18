@@ -9,6 +9,9 @@ const startServer = async () => {
         await connectDB();
 
         // Verify Tools
+        // FFmpeg is now only a fallback path for transcription (transcribeVideo.worker
+        // sends most files straight to Groq, and falls back to ffmpeg-static when it
+        // needs to extract audio), so a missing system ffmpeg is a warning, not fatal.
         console.log("🔍 Verifying system tools...");
         try {
             const ffmpegVer = execSync("ffmpeg -version").toString().split("\n")[0];
@@ -16,10 +19,7 @@ const startServer = async () => {
             console.log(`✅ FFmpeg: ${ffmpegVer}`);
             console.log(`✅ FFprobe: ${ffprobeVer}`);
         } catch (toolError) {
-            console.error("❌ Critical tools missing: Ensure ffmpeg and ffprobe are installed and in PATH.");
-            if (env.NODE_ENV === "production") {
-                throw new Error("Missing critical tools in production");
-            }
+            console.warn("⚠️ System ffmpeg/ffprobe not found on PATH; falling back to ffmpeg-static where needed.");
         }
 
         const PORT = env.PORT || 8000;

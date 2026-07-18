@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuthMiddleware } from '../../middleware/auth';
 
 const router = Router();
 
-router.get('/health', requireAuth(), (req: Request, res: Response) => {
+router.get('/health', requireAuthMiddleware, (req: Request, res: Response) => {
     res.status(200).json({
         status: "ok",
         module: "clueso",

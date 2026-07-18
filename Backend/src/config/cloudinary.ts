@@ -3,13 +3,41 @@ import fs from 'fs';
 import { pipeline } from 'stream/promises';
 import './env'; // ensures dotenv.config() has run before we read process.env.CLOUDINARY_URL below
 
+// Parse CLOUDINARY_URL ourselves instead of relying on the SDK's env auto-detection.
+// Passing a partial object to cloudinary.config() can skip/override the automatic
+// CLOUDINARY_URL parsing (symptom: cloud_name resolves as undefined even though the
+// env var is set). Explicit parsing makes config deterministic regardless of SDK
+// version or import order.
+// Format: cloudinary://<api_key>:<api_secret>@<cloud_name>
+const cloudinaryUrl = process.env.CLOUDINARY_URL;
+if (!cloudinaryUrl) {
+    throw new Error('[cloudinary] CLOUDINARY_URL is not set. Add it to .env (local) or the Render dashboard (production).');
+}
+
+let parsed: URL;
+try {
+    parsed = new URL(cloudinaryUrl);
+} catch {
+    throw new Error('[cloudinary] CLOUDINARY_URL is not a valid URL. Expected format: cloudinary://<api_key>:<api_secret>@<cloud_name>');
+}
+
+if (parsed.protocol !== 'cloudinary:' || !parsed.hostname || !parsed.username || !parsed.password) {
+    throw new Error('[cloudinary] CLOUDINARY_URL is malformed. Expected format: cloudinary://<api_key>:<api_secret>@<cloud_name>');
+}
+
 // Cloudinary accounts created since 2024 require SHA-256 request signing; the SDK
 // still defaults to SHA-1 unless told otherwise, which produces a 401 "Invalid Signature"
 // on every signed upload/delivery call without ever surfacing a useful client-side error.
-cloudinary.config({ secure: true, signature_algorithm: 'sha256' });
+cloudinary.config({
+    cloud_name: parsed.hostname,
+    api_key: parsed.username,
+    api_secret: decodeURIComponent(parsed.password),
+    secure: true,
+    signature_algorithm: 'sha256',
+});
 
 console.log(`[cloudinary] Resolved cloud_name: ${cloudinary.config().cloud_name || 'MISSING'}`);
-console.log(`[cloudinary] Resolved api_key: ${cloudinary.config().api_key || 'MISSING'}`);
+console.log(`[cloudinary] Resolved api_key: ${cloudinary.config().api_key ? 'present' : 'MISSING'}`);
 
 export { cloudinary };
 
@@ -57,10 +85,7 @@ export const downloadFileFromCloudinary = async (
     resourceType: CloudinaryResourceType,
     localPath: string
 ): Promise<void> => {
-    const url = cloudinary.utils.private_download_url(publicId, undefined as any, {
-        resource_type: resourceType,
-        type: 'authenticated',
-    });
+    const url = getSignedDeliveryUrl(publicId, resourceType);
 
     const response = await fetch(url);
     if (!response.ok || !response.body) {
@@ -76,10 +101,7 @@ export const downloadTextFromCloudinary = async (
     publicId: string,
     resourceType: CloudinaryResourceType
 ): Promise<string> => {
-    const url = cloudinary.utils.private_download_url(publicId, undefined as any, {
-        resource_type: resourceType,
-        type: 'authenticated',
-    });
+    const url = getSignedDeliveryUrl(publicId, resourceType);
 
     const response = await fetch(url);
     if (!response.ok) {
@@ -91,17 +113,19 @@ export const downloadTextFromCloudinary = async (
 };
 
 
+// Signed delivery URL for `type: 'authenticated'` assets.
+// NOTE: deliberately no `expires_at` here — time-limited URLs (`__cld_token__`)
+// require Cloudinary's paid Media Authentication add-on. Plain `sign_url: true`
+// embeds a signature in the URL path and works on the free tier.
 export const getSignedDeliveryUrl = (
     publicId: string,
-    resourceType: CloudinaryResourceType,
-    expiresInSeconds: number
+    resourceType: CloudinaryResourceType
 ): string => {
     return cloudinary.url(publicId, {
         resource_type: resourceType,
         type: 'authenticated',
         sign_url: true,
         secure: true,
-        expires_at: Math.floor(Date.now() / 1000) + expiresInSeconds,
     });
 };
 

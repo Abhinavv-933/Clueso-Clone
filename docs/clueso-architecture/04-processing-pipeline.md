@@ -51,17 +51,17 @@ In this stage, the system converts the extracted audio into a structured JSON tr
 **Why it exists**: Raw speech is often messy. To create professional content, we need to refine the spoken word into written standards.
 **What is produced**: A clean, professional script or article ready for use.
 
-### Script Improvement Stage (Local LLM with Ollama)
-In this stage, the system leverages a local instance of the `llama3` model (via Ollama) to transform raw transcribed text into high-quality, readable scripts.
+### Script Improvement Stage (Groq LLM)
+In this stage, the system calls Groq's hosted `llama-3.3-70b-versatile` model via its chat completions API to transform raw transcribed text into high-quality, readable scripts.
 
 - **Purpose of Improvement**:
     - **Filler Word Removal**: Automatically strips out "uh", "um", "you know", etc., that clutter spontaneous speech.
     - **Clarity and Flow**: Polishes sentence structure and fixes minor grammatical errors without altering the speaker's intent.
     - **Consistency**: Ensures the tone remains professional while keeping technical terminology intact.
-- **Why Local LLM (Ollama)**:
-    - **Cost Efficiency**: Zero per-token costs compared to OpenAI or Anthropic APIs, allowing for unlimited iterations on long transcripts.
-    - **Data Sovereignty**: The transcript never leaves the local infrastructure, ensuring user data privacy.
-    - **Low Latency**: Direct communication with the local Ollama daemon avoids internet round-trips.
+- **Why a Hosted LLM (Groq)**:
+    - **Deployability**: A hosted API works on our Render free-tier deployment, unlike a local model server which requires a persistent daemon we can't run there.
+    - **Speed**: Groq's inference hardware returns completions quickly, keeping the pipeline responsive.
+    - **Simplicity**: One API key (`GROQ_API_KEY`) covers both transcription and text tasks — no separate local model management.
 - **Processing Workflow (Chunking)**:
     - **Context Awareness**: To handle long transcripts efficiently and stay within model context limits, the worker splits segments into batches of 5–10.
     - **Prompt Engineering**: Uses structured JSON prompts to ensure the LLM returns an array of improvements that map exactly back to the original timestamps.

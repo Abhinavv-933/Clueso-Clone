@@ -5,7 +5,7 @@ import { ProjectModel } from '../../models/project.model';
 
 export const getTranscript = async (req: Request, res: Response) => {
     try {
-        const userId = req.auth?.userId;
+        const userId = req.auth().userId;
         const { projectId } = req.params;
 
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

@@ -54,26 +54,26 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
                 },
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                // Map backend data to frontend model if necessary
-                // Backend returns: { _id, userId, title, status, ... }
-                // Frontend expects: { id, name, type, status, createdAt }
-                // We need to map _id -> id, title -> name. "type" is missing in backend model.
-                // We should update backend model to include type? Or infer it?
-                // For now, let's assume all are "upload" or just pass a default.
-
-                const mappedProjects: Project[] = data.map((p: any) => ({
-                    id: p._id,
-                    name: p.title,
-                    type: "upload", // Default for now as backend doesn't store type yet
-                    status: "ready", // Force ready status for all uploaded projects to avoid infinite processing spinner
-                    createdAt: p.createdAt,
-                }));
-                setProjects(mappedProjects);
-            } else {
-                console.error("Failed to fetch projects");
+            if (!response.ok) {
+                throw new Error(`Failed to fetch projects (Status: ${response.status})`);
             }
+
+            const data = await response.json();
+            // Map backend data to frontend model if necessary
+            // Backend returns: { _id, userId, title, status, ... }
+            // Frontend expects: { id, name, type, status, createdAt }
+            // We need to map _id -> id, title -> name. "type" is missing in backend model.
+            // We should update backend model to include type? Or infer it?
+            // For now, let's assume all are "upload" or just pass a default.
+
+            const mappedProjects: Project[] = data.map((p: any) => ({
+                id: p._id,
+                name: p.title,
+                type: "upload", // Default for now as backend doesn't store type yet
+                status: "ready", // Force ready status for all uploaded projects to avoid infinite processing spinner
+                createdAt: p.createdAt,
+            }));
+            setProjects(mappedProjects);
         } catch (error) {
             console.error("Error fetching projects:", error);
         } finally {

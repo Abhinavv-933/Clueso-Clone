@@ -16,7 +16,7 @@ export const createJob = async (
     next: NextFunction
 ) => {
     try {
-        const userId = req.auth?.userId;
+        const userId = req.auth().userId;
         if (!userId) {
             return res.status(401).json({ message: 'Unauthorized' });
         }
@@ -96,7 +96,7 @@ export const createJob = async (
 
 export const getJobStatus = async (req: Request, res: Response) => {
     try {
-        const userId = req.auth?.userId;
+        const userId = req.auth().userId;
         const { jobId } = req.params;
 
         if (!userId) {

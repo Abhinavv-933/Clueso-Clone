@@ -7,7 +7,7 @@ import { generateVoiceoverFromCloudinary } from '../workers/voiceover.worker';
  * Triggers the Piper TTS pipeline for an improved script.
  */
 export const handleVoiceoverGeneration = async (req: Request, res: Response) => {
-    const userId = req.auth?.userId;
+    const userId = req.auth().userId;
     const { jobId } = req.body;
 
     // 1. Require Clerk authentication
